@@ -38,10 +38,24 @@ const characterSchema = new mongoose.Schema({
     trim: true
   },
   
-  // System prompt for Gemini AI
+  /**
+   * Istruzioni inviate al modello.
+   *
+   * `select: false` come per `passwordHash`: il campo NON esce da nessuna
+   * query se non viene chiesto esplicitamente con `.select('+systemPrompt')`.
+   *
+   * Prima la protezione era una proiezione `-systemPrompt` ripetuta a mano su
+   * ogni rotta, e bastava dimenticarla una volta perché il campo uscisse:
+   * `GET /api/chats/:id` faceva `.populate('characterId')` senza proiezione e
+   * restituiva le istruzioni di qualunque personaggio pubblico a chiunque
+   * aprisse una chat. Una difesa che dipende dal ricordarsene a ogni query è
+   * una difesa che prima o poi manca; qui il default è sicuro e l'eccezione
+   * va dichiarata.
+   */
   systemPrompt: {
     type: String,
-    required: true
+    required: true,
+    select: false
   },
   
   // Visuals & Categorization

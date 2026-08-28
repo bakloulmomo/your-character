@@ -55,9 +55,18 @@ router.post('/', requireAuth, validate(createChatSchema), async (req, res) => {
       await chat.save();
     }
 
-    // Increment character chat stats
-    character.chatCount += 1;
-    await character.save();
+    // Incremento ATOMICO del contatore.
+    //
+    // Prima era `character.chatCount += 1; await character.save()`: una
+    // lettura-modifica-scrittura, quindi due chat aperte nello stesso istante
+    // ne registravano una sola. È la stessa classe di difetto già corretta
+    // altrove nel progetto (S1-5, S1-11).
+    //
+    // C'è anche una seconda ragione: da quando `systemPrompt` è `select: false`,
+    // il documento caricato qui non lo contiene, e risalvarlo farebbe scattare
+    // il hook `pre('save')` che lo rigenera dai campi correnti. `$inc` tocca
+    // solo il contatore e non rilegge nulla.
+    await Character.findByIdAndUpdate(characterId, { $inc: { chatCount: 1 } });
 
     res.status(201).json(chat);
   } catch (error) {

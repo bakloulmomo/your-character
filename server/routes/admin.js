@@ -133,6 +133,7 @@ router.get('/reports/:id/context', staffOnly, async (req, res) => {
     let target = null;
     if (report.targetType === 'character') {
       target = await Character.findById(report.targetId)
+        .select('+systemPrompt')
         .populate('createdBy', 'username email')
         .lean();
     } else if (report.targetType === 'message') {
@@ -194,6 +195,7 @@ router.get('/characters', staffOnly, async (req, res) => {
       // Qui `systemPrompt` viene incluso di proposito: è il testo che decide il
       // comportamento del personaggio, ed è esattamente ciò che va esaminato.
       Character.find(filter)
+        .select('+systemPrompt')
         .sort({ createdAt: 1 })
         .skip((page - 1) * limit)
         .limit(limit)

@@ -42,7 +42,9 @@ router.post('/', requireAuth, messageLimiter, validate(sendMessageSchema), async
       return res.status(404).json({ error: 'Chat non trovata' });
     }
 
-    const character = await Character.findById(chat.characterId);
+    // `+systemPrompt`: il campo è `select: false` sul modello e serve qui,
+    // perché è ciò che definisce il comportamento del personaggio.
+    const character = await Character.findById(chat.characterId).select('+systemPrompt');
     if (!character) {
       return res.status(404).json({ error: 'Character associato non trovato' });
     }
@@ -216,7 +218,9 @@ router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema),
     const chat = await Chat.findOne({ _id: chatId, userId });
     if (!chat) return res.status(404).json({ error: 'Chat non trovata' });
 
-    const character = await Character.findById(chat.characterId);
+    // `+systemPrompt`: il campo è `select: false` sul modello e serve qui,
+    // perché è ciò che definisce il comportamento del personaggio.
+    const character = await Character.findById(chat.characterId).select('+systemPrompt');
     if (!character) return res.status(404).json({ error: 'Character associato non trovato' });
 
     if (screening.action === 'crisis') {
@@ -349,7 +353,9 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
     const chat = await Chat.findOne({ _id: chatId, userId });
     if (!chat) return res.status(404).json({ error: 'Chat non trovata' });
 
-    const character = await Character.findById(chat.characterId);
+    // `+systemPrompt`: il campo è `select: false` sul modello e serve qui,
+    // perché è ciò che definisce il comportamento del personaggio.
+    const character = await Character.findById(chat.characterId).select('+systemPrompt');
     if (!character) return res.status(404).json({ error: 'Character associato non trovato' });
 
     const last = await Message.findOne({ chatId, role: 'assistant' }).sort({ createdAt: -1 });

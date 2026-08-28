@@ -124,7 +124,7 @@ router.get('/me/export', requireAuth, exportLimiter, async (req, res) => {
 
     const [userChats, userCharacters, userTransactions] = await Promise.all([
       Chat.find({ userId }).lean(),
-      Character.find({ createdBy: userId }).lean(),
+      Character.find({ createdBy: userId }).select('+systemPrompt').lean(),
       Transaction.find({ userId }).lean()
     ]);
 
