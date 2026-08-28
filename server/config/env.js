@@ -137,6 +137,65 @@ const sellerDetails = () => ({
 });
 
 /**
+ * Interruttori di funzionalità.
+ *
+ * Il prodotto parte come BETA CHIUSA E GRATUITA: niente pagamenti, niente
+ * abbonamenti, niente generazione di immagini. Non è una limitazione tecnica,
+ * è una decisione economica e legale precisa:
+ *
+ *  · PAGAMENTI — incassare in modo continuativo richiede una partita IVA e la
+ *    registrazione OSS per l'IVA sui clienti UE. Finché non ci sono, accettare
+ *    denaro non è un'opzione. Il codice resta completo e testato: si riaccende
+ *    con una variabile d'ambiente il giorno in cui i dati fiscali esistono.
+ *
+ *  · ABBONAMENTI — un abbonamento incassa una volta e poi produce costi per
+ *    trenta giorni senza tetto correlato al prezzo. Con i tetti attuali un
+ *    abbonato annuale che usa ciò che ha pagato costa ~146$ contro ~53$ di
+ *    ricavo netto. I pacchetti crediti hanno il comportamento opposto — il
+ *    ricavo PRECEDE sempre il costo, con margine ~90-95% qualunque uso ne
+ *    faccia l'utente — quindi la beta usa solo quelli.
+ *
+ *  · IMMAGINI — costano $0.025 l'una contro $0.0015 di un messaggio: sono
+ *    diciassette volte più care e sono l'unica voce capace di far male su
+ *    scala piccola. Restano spente finché non c'è un ricavo che le sostenga.
+ *
+ * Il valore predefinito è SEMPRE quello prudente: una variabile dimenticata
+ * lascia la funzione spenta, non accesa. È la stessa direzione di fallimento
+ * scelta per NODE_ENV.
+ */
+const flagEnabled = (name) => process.env[name] === 'true';
+
+const features = () => ({
+  payments: flagEnabled('FEATURE_PAYMENTS'),
+  subscriptions: flagEnabled('FEATURE_SUBSCRIPTIONS'),
+  imageGeneration: flagEnabled('FEATURE_IMAGE_GENERATION')
+});
+
+/**
+ * Crediti assegnati a un nuovo account.
+ *
+ * In beta gratuita servono a far provare il prodotto davvero: dieci crediti
+ * sono dieci messaggi, cioè meno di una conversazione, e con i pagamenti
+ * spenti non ci sarebbe alcun modo di proseguire. Il valore è configurabile
+ * perché il numero giusto dipende dalla fase, non dal codice.
+ */
+const welcomeCredits = () => {
+  const n = Number.parseInt(process.env.WELCOME_CREDITS, 10);
+  if (Number.isInteger(n) && n >= 0 && n <= 100000) return n;
+  return features().payments ? 10 : 100;
+};
+
+/**
+ * Codice d'invito per la beta chiusa.
+ *
+ * Se impostato, la registrazione lo richiede. È ciò che rende «chiusa» una
+ * beta chiusa: senza, chiunque trovi l'indirizzo può iscriversi, e con i
+ * crediti di cortesia ogni iscritto è un costo in chiamate al modello.
+ * Non impostandolo, la registrazione resta aperta.
+ */
+const betaInviteCode = () => (process.env.BETA_INVITE_CODE || '').trim() || null;
+
+/**
  * Validazione fail-fast della configurazione di produzione.
  * Raccoglie TUTTI i problemi e li segnala insieme: un deploy incompleto va
  * scoperto in una sola volta, non un segreto alla volta.
@@ -162,23 +221,44 @@ function assertProductionEnv() {
     problems.push(`JWT_SECRET: troppo corto (${secret.length} caratteri, minimo ${MIN_JWT_SECRET_LENGTH}).`);
   }
 
-  // Sono accettate sia le chiavi segrete (`sk_`) sia quelle RISTRETTE (`rk_`).
-  // Stripe raccomanda le seconde: portano solo i permessi che si assegnano
-  // loro, quindi una chiave trafugata può fare molto meno danno. La versione
-  // precedente ammetteva solo `sk_`, e chi avesse seguito quella
-  // raccomandazione si sarebbe visto rifiutare l'avvio del server.
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) {
-    problems.push('STRIPE_SECRET_KEY: mancante — senza chiave reale nessun pagamento è possibile.');
-  } else if (isPlaceholder(stripeKey) || !/^(sk|rk)_(live|test)_/.test(stripeKey)) {
-    problems.push('STRIPE_SECRET_KEY: è un segnaposto, non una chiave Stripe reale (attese sk_ o rk_).');
+  /**
+   * Stripe è richiesto SOLO se i pagamenti sono accesi.
+   *
+   * In beta gratuita non si incassa nulla, quindi pretendere le chiavi
+   * impedirebbe il deploy di un'applicazione che non ne ha alcun bisogno. Il
+   * legame giusto è con la funzione, non con l'ambiente: se accendi
+   * FEATURE_PAYMENTS senza saper incassare, il server non parte — ed è
+   * esattamente quando quel controllo serve.
+   *
+   * Sono accettate sia le chiavi segrete (`sk_`) sia quelle RISTRETTE (`rk_`).
+   * Stripe raccomanda le seconde: portano solo i permessi che si assegnano
+   * loro, quindi una chiave trafugata può fare molto meno danno.
+   */
+  if (features().payments) {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) {
+      problems.push('STRIPE_SECRET_KEY: mancante, ma FEATURE_PAYMENTS è attivo — senza chiave reale nessun pagamento è possibile.');
+    } else if (isPlaceholder(stripeKey) || !/^(sk|rk)_(live|test)_/.test(stripeKey)) {
+      problems.push('STRIPE_SECRET_KEY: è un segnaposto, non una chiave Stripe reale (attese sk_ o rk_).');
+    }
+
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      problems.push('STRIPE_WEBHOOK_SECRET: mancante — senza di esso le notifiche di pagamento non sono verificabili, e i crediti di chi paga non verrebbero mai accreditati.');
+    } else if (isPlaceholder(webhookSecret)) {
+      problems.push('STRIPE_WEBHOOK_SECRET: è un segnaposto, non il segreto reale dell\'endpoint webhook.');
+    }
+
+    // Vendere senza intestazione fiscale significa emettere ricevute che
+    // dichiarano il vero solo perché ammettono di essere provvisorie. Non è
+    // una base su cui incassare da clienti reali.
+    if (!sellerDetails().configured) {
+      problems.push('SELLER_NAME / SELLER_VAT_NUMBER / SELLER_ADDRESS: mancanti, ma FEATURE_PAYMENTS è attivo — le ricevute sarebbero prive di intestazione fiscale.');
+    }
   }
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    problems.push('STRIPE_WEBHOOK_SECRET: mancante — senza di esso le notifiche di pagamento non sono verificabili.');
-  } else if (isPlaceholder(webhookSecret)) {
-    problems.push('STRIPE_WEBHOOK_SECRET: è un segnaposto, non il segreto reale dell\'endpoint webhook.');
+  if (features().subscriptions && !features().payments) {
+    problems.push('FEATURE_SUBSCRIPTIONS è attivo ma FEATURE_PAYMENTS no: gli abbonamenti non possono esistere senza pagamenti.');
   }
 
   const geminiKey = process.env.GEMINI_API_KEY;
@@ -197,6 +277,9 @@ function assertProductionEnv() {
 
 module.exports = {
   DEFAULT_JWT_SECRET,
+  features,
+  welcomeCredits,
+  betaInviteCode,
   isProduction,
   isTest,
   isPlaceholder,

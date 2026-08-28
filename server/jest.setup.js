@@ -49,3 +49,19 @@ process.env.STABILITY_API_KEY = 'mock_stability_key';
 // Recapiti e raccolta errori: nessun invio verso l'esterno durante i test.
 delete process.env.RESEND_API_KEY;
 delete process.env.SENTRY_DSN;
+
+/**
+ * Funzionalità ACCESE nei test, spente in produzione.
+ *
+ * Sembra una contraddizione e non lo è. Pagamenti, abbonamenti e immagini
+ * restano spenti nel prodotto per ragioni economiche e legali, ma il loro
+ * codice esiste, è completo e dovrà funzionare il giorno in cui si riaccende.
+ * Un codice che nessun test percorre più è codice che si guasta in silenzio e
+ * lo scopri al momento peggiore — cioè quando decidi di incassare.
+ *
+ * `tests/features.test.js` fa il contrario: cancella queste variabili per
+ * verificare che da spente le rotte siano davvero chiuse.
+ */
+process.env.FEATURE_PAYMENTS = 'true';
+process.env.FEATURE_SUBSCRIPTIONS = 'true';
+process.env.FEATURE_IMAGE_GENERATION = 'true';

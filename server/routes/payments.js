@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const { mockPaymentsEnabled, isProduction } = require('../config/env');
 const { checkoutLimiter } = require('../middleware/rateLimit');
+const { requireFeature } = require('../middleware/featureGate');
 const crypto = require('crypto');
 const { breakdown, isEuCountry, rateFor, RATES_REVIEWED_ON } = require('../services/vat');
 const { nextSequence } = require('../models/Counter');
@@ -83,17 +84,17 @@ async function assignInvoiceNumber(transaction) {
 }
 
 // GET /api/payments/packages - Returns available credit packages
-router.get('/packages', (req, res) => {
+router.get('/packages', requireFeature('payments'), (req, res) => {
   res.json(CREDIT_PACKAGES);
 });
 
 // GET /api/payments/plans - Returns available subscription plans
-router.get('/plans', (req, res) => {
+router.get('/plans', requireFeature('subscriptions'), (req, res) => {
   res.json(SUBSCRIPTION_PLANS);
 });
 
 // POST /api/payments/checkout - Create Stripe PaymentIntent for a credit pack
-router.post('/checkout', requireAuth, checkoutLimiter, async (req, res) => {
+router.post('/checkout', requireFeature('payments'), requireAuth, checkoutLimiter, async (req, res) => {
   try {
     const { packageId } = req.body;
 
@@ -346,7 +347,7 @@ router.post('/webhook', async (req, res) => {
 // In production, real PaymentIntents are completed by the Stripe webhook; this route
 // only settles mock transactions (id starting with 'pi_mock_'). The client must call
 // this and read the balance from the response instead of granting credits locally.
-router.post('/confirm', requireAuth, async (req, res) => {
+router.post('/confirm', requireFeature('payments'), requireAuth, async (req, res) => {
   try {
     // In produzione questa rotta non esiste: i pagamenti veri si concludono
     // esclusivamente con il webhook firmato di Stripe. Lasciarla raggiungibile
@@ -411,7 +412,7 @@ router.post('/confirm', requireAuth, async (req, res) => {
 // POST /api/payments/subscribe - Activate a monthly/annual subscription.
 // Mock mode activates immediately; real Stripe returns a Checkout Session URL and
 // activation happens on the checkout.session.completed webhook.
-router.post('/subscribe', requireAuth, async (req, res) => {
+router.post('/subscribe', requireFeature('subscriptions'), requireAuth, async (req, res) => {
   try {
     const { plan } = req.body;
     const cfg = SUBSCRIPTION_PLANS[plan];
@@ -485,7 +486,7 @@ router.post('/subscribe', requireAuth, async (req, res) => {
 // Prima questa rotta portava subito il piano a `free` — l'utente perdeva il
 // periodo già pagato — e non chiamava mai Stripe, quindi l'addebito ricorrente
 // continuava: il peggiore dei due mondi (S1-8).
-router.post('/cancel-subscription', requireAuth, async (req, res) => {
+router.post('/cancel-subscription', requireFeature('subscriptions'), requireAuth, async (req, res) => {
   try {
     const user = req.user;
 
@@ -627,7 +628,7 @@ router.get('/receipt/:transactionId', requireAuth, async (req, res) => {
  * Serve all'interfaccia per mostrare imponibile e imposta PRIMA del pagamento,
  * invece di far comparire un totale senza spiegazione.
  */
-router.get('/vat-preview', requireAuth, async (req, res) => {
+router.get('/vat-preview', requireFeature('payments'), requireAuth, async (req, res) => {
   const { packageId, plan } = req.query;
   const source = CREDIT_PACKAGES[packageId] || SUBSCRIPTION_PLANS[plan];
   if (!source) return res.status(400).json({ error: 'Pacchetto o piano non valido' });

@@ -102,6 +102,27 @@ app.use('/api/admin', require('./routes/admin'));
 const { LOCAL_DIR, PUBLIC_PREFIX } = require('./services/storageService');
 app.use(PUBLIC_PREFIX, express.static(LOCAL_DIR, { maxAge: '7d', fallthrough: true }));
 
+/**
+ * Configurazione pubblica dell'istanza.
+ *
+ * Il client deve sapere che cosa è acceso PRIMA di disegnare l'interfaccia:
+ * un pulsante «Ricarica crediti» che porta a un 404 è peggio di un pulsante
+ * assente. Non è una difesa — quella sta sulle rotte, in `featureGate` — è
+ * solo il modo in cui l'interfaccia evita di promettere ciò che non esiste.
+ *
+ * Espone unicamente interruttori, mai segreti né dettagli di configurazione.
+ */
+app.get('/api/config', (req, res) => {
+  const { features, betaInviteCode } = require('./config/env');
+  res.set('Cache-Control', 'public, max-age=60');
+  res.json({
+    features: features(),
+    // Solo SE serve un invito, mai quale: il modulo deve poter mostrare il
+    // campo, non superare il controllo.
+    inviteRequired: !!betaInviteCode()
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({

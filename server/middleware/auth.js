@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { getAuth } = require('@clerk/express');
 const User = require('../models/User');
-const { jwtSecret, isTest } = require('../config/env');
+const { jwtSecret, isTest, welcomeCredits } = require('../config/env');
 
 /**
  * Estrae il token dalla richiesta: header Authorization o cookie di sessione.
@@ -57,7 +57,7 @@ const resolveUser = async (req) => {
         authProvider: 'clerk',
         email: `${clerkId}@user.your-character.app`,
         username: `user_${clerkId.slice(-6)}`,
-        credits: 10
+        credits: welcomeCredits()
       });
     }
     return user;
@@ -76,7 +76,7 @@ const resolveUser = async (req) => {
           authProvider: 'clerk',
           email: req.headers['x-mock-email'] || `${mockClerkHeader}@example.com`,
           username: req.headers['x-mock-username'] || mockClerkHeader,
-          credits: 10
+          credits: welcomeCredits()
         });
       }
       return user;

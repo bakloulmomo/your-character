@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/featureGate');
 const { imageLimiter } = require('../middleware/rateLimit');
 const { validate } = require('../middleware/validate');
 const { generateImageSchema } = require('../utils/validation');
@@ -16,7 +17,10 @@ const { reserveAllowance, IMAGE_CREDIT_COST } = require('../models/User');
 const Transaction = require('../models/Transaction');
 
 // POST /api/images/generate - Generate image in chat (Deducts 10 credits)
-router.post('/generate', requireAuth, imageLimiter, validate(generateImageSchema), async (req, res) => {
+// La generazione di immagini costa $0.025 a chiamata contro $0.0015 di un
+// messaggio: e' l'unica voce capace di far male su scala piccola, e resta
+// spenta finche' non c'e' un ricavo che la sostenga (FEATURE_IMAGE_GENERATION).
+router.post('/generate', requireFeature('imageGeneration'), requireAuth, imageLimiter, validate(generateImageSchema), async (req, res) => {
   let reservation = null;
   try {
     const { chatId, prompt } = req.body;

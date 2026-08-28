@@ -22,7 +22,10 @@ let mongoServer;
 let user;
 let token;
 
-const ENV_KEYS = ['NODE_ENV', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'GEMINI_API_KEY', 'JWT_SECRET', 'MONGODB_URI', 'FRONTEND_URL', 'STABILITY_API_KEY'];
+const ENV_KEYS = ['NODE_ENV', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'GEMINI_API_KEY', 'JWT_SECRET', 'MONGODB_URI', 'FRONTEND_URL', 'STABILITY_API_KEY',
+  // Con i pagamenti accesi la configurazione di produzione include anche
+  // l'intestazione fiscale: senza, le ricevute non sarebbero emettibili.
+  'SELLER_NAME', 'SELLER_VAT_NUMBER', 'SELLER_ADDRESS', 'FEATURE_PAYMENTS', 'FEATURE_SUBSCRIPTIONS'];
 let savedEnv;
 
 const tokenFor = (u, secret = process.env.JWT_SECRET) =>
@@ -240,7 +243,38 @@ describe('FASE A — Sicurezza economica', () => {
       process.env.STRIPE_SECRET_KEY = 'sk_live_chiaveveradiproduzione';
       process.env.STRIPE_WEBHOOK_SECRET = 'whsec_chiaveveradiproduzione';
       process.env.GEMINI_API_KEY = 'AIzaChiaveGeminiRealeDiProduzione';
+      // Vendere richiede un'intestazione fiscale vera: una ricevuta senza
+      // venditore non e' una ricevuta. Fanno parte della configurazione
+      // completa tanto quanto le chiavi.
+      process.env.SELLER_NAME = 'Esempio S.r.l.';
+      process.env.SELLER_VAT_NUMBER = 'IT01234567890';
+      process.env.SELLER_ADDRESS = 'Via Esempio 1, 20100 Milano (MI), Italia';
     };
+
+    it('con i pagamenti accesi ma senza intestazione fiscale, l avvio viene rifiutato', () => {
+      validEnv();
+      delete process.env.SELLER_VAT_NUMBER;
+      expect(() => assertProductionEnv()).toThrow(/SELLER_/);
+    });
+
+    it('con i pagamenti spenti l intestazione fiscale non serve: non si incassa nulla', () => {
+      validEnv();
+      delete process.env.SELLER_NAME;
+      delete process.env.SELLER_VAT_NUMBER;
+      delete process.env.SELLER_ADDRESS;
+      delete process.env.STRIPE_SECRET_KEY;
+      delete process.env.STRIPE_WEBHOOK_SECRET;
+      process.env.FEATURE_PAYMENTS = 'false';
+      process.env.FEATURE_SUBSCRIPTIONS = 'false';
+      expect(() => assertProductionEnv()).not.toThrow();
+    });
+
+    it('gli abbonamenti accesi senza pagamenti sono una configurazione incoerente', () => {
+      validEnv();
+      process.env.FEATURE_PAYMENTS = 'false';
+      process.env.FEATURE_SUBSCRIPTIONS = 'true';
+      expect(() => assertProductionEnv()).toThrow(/FEATURE_SUBSCRIPTIONS/);
+    });
 
     it('una configurazione completa passa la validazione', () => {
       validEnv();

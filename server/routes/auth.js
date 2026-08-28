@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { sendMail } = require('../services/mailService');
 const { requireAuth, attachUser } = require('../middleware/auth');
-const { jwtSecret, isProduction, adminEmails } = require('../config/env');
+const { jwtSecret, isProduction, adminEmails, welcomeCredits, betaInviteCode, features } = require('../config/env');
 
 const getJwtSecret = () => jwtSecret();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -74,6 +74,19 @@ const registerSchema = z.object({
     .refine((s) => !Number.isNaN(Date.parse(s)), 'Data di nascita non valida')
     .refine((s) => ageFrom(s) >= 18 && ageFrom(s) < 120, 'Devi avere almeno 18 anni per registrarti')
 });
+
+/**
+ * Codice d'invito della beta chiusa.
+ *
+ * Facoltativo nello schema perche' la verifica dipende dalla configurazione:
+ * se `BETA_INVITE_CODE` non e' impostato la registrazione resta aperta, e
+ * imporre un campo che nessuno controlla sarebbe solo un ostacolo inutile.
+ */
+const inviteMatches = (provided) => {
+  const expected = betaInviteCode();
+  if (!expected) return true;
+  return String(provided || '').trim().toLowerCase() === expected.toLowerCase();
+};
 
 const loginSchema = z.object({
   email: z.string().email('Indirizzo email non valido').trim().toLowerCase(),
@@ -152,6 +165,15 @@ router.post('/register', registerLimiter, async (req, res) => {
 
     const { email, username, password, birthdate } = parseResult.data;
 
+    // Beta chiusa: senza un invito valido non si entra. Il controllo sta prima
+    // di ogni scrittura, cosi' un tentativo respinto non lascia nulla dietro.
+    if (!inviteMatches(req.body.inviteCode)) {
+      return res.status(403).json({
+        error: 'Questo codice d\'invito non e\' valido. La beta e\' su invito: se ne hai ricevuto uno, controlla di averlo copiato per intero.',
+        requiresInvite: true
+      });
+    }
+
     // Controllo preventivo: dà un messaggio preciso nel caso normale.
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
@@ -178,7 +200,9 @@ router.post('/register', registerLimiter, async (req, res) => {
         passwordHash,
         birthdate: parsedBirthdate,
         authProvider: 'local',
-        credits: 10,
+        // In beta gratuita i pagamenti sono spenti: dieci crediti sarebbero
+        // dieci messaggi e nessun modo di proseguire (vedi welcomeCredits).
+        credits: welcomeCredits(),
         subscription: 'free',
         lastLoginAt: new Date()
       });
