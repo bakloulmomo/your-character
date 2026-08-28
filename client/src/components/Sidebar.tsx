@@ -113,9 +113,14 @@ export default function Sidebar() {
         </div>
 
         <div className="flex flex-col gap-3 px-3">
+          {/* Un solo primario per volta.
+              Da disconnesso l'azione che conta e' registrarsi, e «Crea» porta
+              comunque a una pagina che chiede di accedere: tenerli entrambi
+              pieni faceva competere due bottoni blu per la stessa attenzione,
+              e quando tutto e' primario niente lo e'. */}
           <Link
             to="/create"
-            className={`btn-primary flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm ${collapsed ? 'md:px-0' : ''}`}
+            className={`${user ? 'btn-primary' : 'btn-secondary'} flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm ${collapsed ? 'md:px-0' : ''}`}
             title={collapsed ? 'Crea personaggio' : undefined}
           >
             <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />

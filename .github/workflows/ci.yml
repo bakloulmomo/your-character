@@ -54,6 +54,16 @@ jobs:
         working-directory: server
         run: npm test
 
+      # La suite non deve dipendere da un file `.env`, che in CI non esiste e
+      # sulla macchina di chi sviluppa e' diverso ogni volta. `jest.setup.js`
+      # fissa le credenziali dei servizi esterni prima di ogni import: questo
+      # passo verifica che la garanzia regga davvero, invece di fidarsene.
+      - name: Verifica che i test non dipendano da .env
+        working-directory: server
+        run: |
+          test ! -f .env || { echo "Un .env non deve mai finire nel repository"; exit 1; }
+          npm test
+
       - name: Audit delle dipendenze
         working-directory: server
         # `--audit-level=high` per non bloccare su segnalazioni minori delle
