@@ -40,7 +40,14 @@ export const testCharacter = (overrides: Partial<Character> = {}): Character => 
   ...overrides
 });
 
-/** Riporta lo store allo stato iniziale fra un test e l'altro. */
+/**
+ * Riporta lo store allo stato iniziale fra un test e l'altro.
+ *
+ * Deve elencare OGNI campo che un test possa modificare: quelli dimenticati
+ * sopravvivono al test che li ha scritti e finiscono nel successivo, che
+ * comincia a passare o fallire per ragioni che non gli appartengono. È già
+ * successo con `features`, aggiunto allo store e non qui.
+ */
 export function resetStore(partial: Record<string, unknown> = {}) {
   useStore.setState({
     user: null,
@@ -53,6 +60,11 @@ export function resetStore(partial: Record<string, unknown> = {}) {
     chats: [],
     chatsStatus: 'ready',
     toasts: [],
+    // Stato di partenza dell'istanza: tutto spento, come prima che il server
+    // risponda a /api/config.
+    features: { payments: false, subscriptions: false, imageGeneration: false },
+    inviteRequired: false,
+    isConfigResolved: false,
     ...partial
   });
 }

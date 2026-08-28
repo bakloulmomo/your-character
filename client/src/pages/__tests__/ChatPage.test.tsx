@@ -111,7 +111,13 @@ describe('ChatPage', () => {
     await waitFor(() => expect(useStore.getState().user?.credits).toBe(2));
   });
 
-  it('con i crediti esauriti apre la finestra di ricarica invece di fallire in silenzio', async () => {
+  it('con i crediti esauriti E i pagamenti attivi apre la finestra di ricarica', async () => {
+    // I pagamenti sono spenti per difetto (beta gratuita): qui si verifica il
+    // comportamento della fase in cui invece si vende.
+    useStore.setState({
+      features: { payments: true, subscriptions: false, imageGeneration: false }
+    });
+
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       jsonResponse(402, { error: 'Crediti esauriti o limite giornaliero raggiunto.' })
     ));
@@ -120,6 +126,21 @@ describe('ChatPage', () => {
     await send('Ciao');
 
     await waitFor(() => expect(useStore.getState().isBuyCreditsModalOpen).toBe(true));
+  });
+
+  it('durante la beta gratuita non apre una finestra di acquisto che non porta a nulla', async () => {
+    // Con i pagamenti spenti non c'e' niente da comprare: aprire il listino
+    // sarebbe una promessa vuota. Si dice com'e' e basta.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      jsonResponse(402, { error: 'Crediti esauriti o limite giornaliero raggiunto.' })
+    ));
+
+    renderChat();
+    await send('Ciao');
+
+    await waitFor(() => expect(useStore.getState().toasts.length).toBeGreaterThan(0));
+    expect(useStore.getState().isBuyCreditsModalOpen).toBe(false);
+    expect(useStore.getState().toasts[0].message).toMatch(/beta/i);
   });
 
   it('con i crediti esauriti il messaggio scritto non va perso', async () => {

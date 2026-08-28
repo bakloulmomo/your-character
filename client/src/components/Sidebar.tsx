@@ -17,7 +17,7 @@ export default function Sidebar() {
   const {
     user, logout, isSidebarCollapsed, toggleSidebar,
     isMobileSidebarOpen, setMobileSidebarOpen,
-    setAuthModalOpen, setBuyCreditsModalOpen
+    setAuthModalOpen, setBuyCreditsModalOpen, features
   } = useStore();
 
   const { chats, status, deleteChat } = useChats();
@@ -258,7 +258,9 @@ export default function Sidebar() {
 
         {/* Account */}
         <div className="border-t border-line p-3">
-          {!collapsed && (
+{/* Durante la beta non c'e' nulla da acquistare. Il comando sparisce
+              invece di portare a un listino irraggiungibile. */}
+          {!collapsed && features.payments && (
             <button
               onClick={() => setBuyCreditsModalOpen(true)}
               className="btn-primary mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs"
@@ -294,9 +296,11 @@ export default function Sidebar() {
                   <Link to="/profile" role="menuitem" onClick={() => setAccountMenuOpen(false)} className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-ink-muted transition-colors hover:bg-surface hover:text-ink">
                     <UserIcon className="h-4 w-4" aria-hidden="true" /> Profilo
                   </Link>
-                  <button role="menuitem" onClick={() => { setAccountMenuOpen(false); setBuyCreditsModalOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-ink-muted transition-colors hover:bg-surface hover:text-ink">
-                    <Coins className="h-4 w-4" aria-hidden="true" /> Ricarica crediti
-                  </button>
+                  {features.payments && (
+                    <button role="menuitem" onClick={() => { setAccountMenuOpen(false); setBuyCreditsModalOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-ink-muted transition-colors hover:bg-surface hover:text-ink">
+                      <Coins className="h-4 w-4" aria-hidden="true" /> Ricarica crediti
+                    </button>
+                  )}
                   <Link to="/settings" role="menuitem" onClick={() => setAccountMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-ink-muted transition-colors hover:bg-surface hover:text-ink">
                     <Settings className="h-4 w-4" aria-hidden="true" /> Impostazioni
                   </Link>

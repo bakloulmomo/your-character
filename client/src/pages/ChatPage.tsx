@@ -15,7 +15,7 @@ const MAX_LENGTH = 4000;
 export default function ChatPage() {
   const { chatId } = useParams();
   const navigate = useNavigate();
-  const { user, updateCredits, setBuyCreditsModalOpen, setReportModalOpen, notify } = useStore();
+  const { user, updateCredits, setBuyCreditsModalOpen, setReportModalOpen, notify, features } = useStore();
   const { reload: reloadChats } = useChats();
   const { messages, status, hasMore, loadingOlder, loadOlder, setMessages, reload } = useMessages(chatId);
 
@@ -25,6 +25,21 @@ export default function ChatPage() {
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
+
+  /**
+   * Crediti esauriti.
+   *
+   * Con i pagamenti attivi si apre il modale di ricarica. Durante la beta
+   * gratuita non c'e' nulla da comprare, quindi aprirlo sarebbe una promessa
+   * vuota: si dice com'e'.
+   */
+  const handleOutOfCredits = () => {
+    if (features.payments) {
+      setBuyCreditsModalOpen(true);
+      return;
+    }
+    notify('Hai esaurito i crediti della beta. In questa fase non e\' ancora possibile acquistarne altri.', 'info');
+  };
   const [imagePrompt, setImagePrompt] = useState('');
   const [generatingImage, setGeneratingImage] = useState(false);
 
@@ -107,7 +122,7 @@ export default function ChatPage() {
 
         if (response.status === 402) {
           setInput(text);
-          setBuyCreditsModalOpen(true);
+          handleOutOfCredits();
         } else if (response.status === 429) {
           setInput(text);
           notify(payload.error ?? 'Stai inviando messaggi troppo rapidamente.', 'error');
@@ -205,7 +220,7 @@ export default function ChatPage() {
       );
       if (typeof res.data.user?.credits === 'number') updateCredits(res.data.user.credits);
     } catch (err: any) {
-      if (err.response?.status === 402) setBuyCreditsModalOpen(true);
+      if (err.response?.status === 402) handleOutOfCredits();
       else notify(err.response?.data?.error ?? 'Impossibile rigenerare la risposta.', 'error');
     } finally {
       setBusy(false);
@@ -236,7 +251,7 @@ export default function ChatPage() {
     } catch (err: any) {
       if (err.response?.status === 402) {
         setImageOpen(false);
-        setBuyCreditsModalOpen(true);
+        handleOutOfCredits();
       } else {
         notify(err.response?.data?.error ?? 'Impossibile generare l\'immagine.', 'error');
       }
@@ -298,14 +313,18 @@ export default function ChatPage() {
           )}
         </div>
 
-        <button
-          onClick={() => setImageOpen(true)}
-          className="btn-secondary flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs"
-        >
-          <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="hidden sm:inline">Immagine</span>
-          <span className="font-mono text-[10px] text-ink-dim">10</span>
-        </button>
+{/* La generazione di immagini e' spenta durante la beta: il comando non
+            viene mostrato invece di portare a un errore. */}
+        {features.imageGeneration && (
+          <button
+            onClick={() => setImageOpen(true)}
+            className="btn-secondary flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs"
+          >
+            <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Immagine</span>
+            <span className="font-mono text-[10px] text-ink-dim">10</span>
+          </button>
+        )}
       </header>
 
       {/* Conversazione */}

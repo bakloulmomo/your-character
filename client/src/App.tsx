@@ -60,7 +60,25 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  const { token, setUser, setAuthResolved, logout } = useStore();
+  const { token, setUser, setAuthResolved, logout, setConfig } = useStore();
+
+  // Quali funzioni sono accese su questa istanza. Va chiesto PRIMA di disegnare
+  // i comandi: l'alternativa e' mostrare pulsanti che spariscono un istante
+  // dopo, o peggio che restano e portano a un 404.
+  useEffect(() => {
+    api
+      .get('/config')
+      .then((res) => {
+        if (res.data?.features) {
+          setConfig({ features: res.data.features, inviteRequired: !!res.data.inviteRequired });
+        }
+      })
+      .catch(() => {
+        // Server irraggiungibile: si resta sul valore iniziale, cioe' tutto
+        // spento. Meglio un'interfaccia che offre meno del vero che una che
+        // promette funzioni irraggiungibili.
+      });
+  }, [setConfig]);
 
   // Verifica la sessione all'avvio. Nessun ritardo artificiale: prima c'era un
   // timer fisso di 600 ms indipendente da qualunque caricamento reale (S3-30).

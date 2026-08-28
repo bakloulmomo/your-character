@@ -15,7 +15,7 @@ const currentYear = new Date().getUTCFullYear();
 const YEARS = Array.from({ length: 100 }, (_, i) => currentYear - 18 - i);
 
 export default function AuthModal() {
-  const { isAuthModalOpen, authModalMode, setAuthModalOpen, setUser, setToken, notify } = useStore();
+  const { isAuthModalOpen, authModalMode, setAuthModalOpen, setUser, setToken, notify, inviteRequired } = useStore();
 
   const [view, setView] = useState<View>('login');
   const [email, setEmail] = useState('');
@@ -25,6 +25,7 @@ export default function AuthModal() {
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -97,7 +98,9 @@ export default function AuthModal() {
         email,
         username,
         password,
-        birthdate: `${year}-${String(Number(month) + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        birthdate: `${year}-${String(Number(month) + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        // Inviato solo quando serve: il server ignora il campo se la beta e' aperta.
+        ...(inviteRequired ? { inviteCode } : {})
       });
       setToken(res.data.token);
       setUser(res.data.user);
@@ -283,6 +286,30 @@ export default function AuthModal() {
                     </select>
                   </div>
                 </fieldset>
+
+                {/* Beta su invito. Il campo compare solo se il server dichiara
+                    di richiederlo: altrimenti sarebbe un ostacolo senza scopo. */}
+                {inviteRequired && (
+                  <div>
+                    <label htmlFor="invite-code" className="mb-1.5 block text-sm font-medium text-ink">
+                      Codice d'invito
+                    </label>
+                    <p className="mb-2 text-xs text-ink-dim">
+                      L'accesso è su invito durante la beta. Se ne hai ricevuto uno, incollalo qui.
+                    </p>
+                    <input
+                      id="invite-code"
+                      type="text"
+                      value={inviteCode}
+                      onChange={(e) => setInviteCode(e.target.value)}
+                      required
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="es. AMICI-2026"
+                      className="input-field font-mono"
+                    />
+                  </div>
+                )}
               </>
             )}
 

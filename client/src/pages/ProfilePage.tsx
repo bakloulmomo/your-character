@@ -7,7 +7,7 @@ import Avatar from '../components/ui/Avatar';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
 
 export default function ProfilePage() {
-  const { user, setAuthModalOpen, setBuyCreditsModalOpen } = useStore();
+  const { user, setAuthModalOpen, setBuyCreditsModalOpen, features } = useStore();
   const { characters, status, reload } = useMyCharacters(!!user);
 
   if (!user) {
@@ -47,9 +47,13 @@ export default function ProfilePage() {
         <div className="rounded-2xl border border-line bg-surface p-4">
           <p className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">Crediti</p>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{user.credits}</p>
-          <button onClick={() => setBuyCreditsModalOpen(true)} className="mt-2 flex items-center gap-1 text-xs text-sapphire-glow hover:underline">
-            <Coins className="h-3 w-3" aria-hidden="true" /> Ricarica
-          </button>
+          {features.payments ? (
+            <button onClick={() => setBuyCreditsModalOpen(true)} className="mt-2 flex items-center gap-1 text-xs text-sapphire-glow hover:underline">
+              <Coins className="h-3 w-3" aria-hidden="true" /> Ricarica
+            </button>
+          ) : (
+            <p className="mt-2 text-xs text-ink-dim">Crediti della beta</p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-line bg-surface p-4">

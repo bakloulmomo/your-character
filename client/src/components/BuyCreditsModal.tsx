@@ -73,7 +73,7 @@ const PACKAGES = [
 ];
 
 export default function BuyCreditsModal() {
-  const { isBuyCreditsModalOpen, setBuyCreditsModalOpen, updateCredits, user, setUser } = useStore();
+  const { isBuyCreditsModalOpen, setBuyCreditsModalOpen, updateCredits, user, setUser, features } = useStore();
   const [selectedPack, setSelectedPack] = useState('popular');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -87,7 +87,9 @@ export default function BuyCreditsModal() {
     if (isBuyCreditsModalOpen && hasFunctionalConsent()) getStripe();
   }, [isBuyCreditsModalOpen]);
 
-  if (!isBuyCreditsModalOpen) return null;
+  // Seconda barriera, dopo quella sulle rotte: se i pagamenti sono spenti il
+  // modale non si apre nemmeno se qualcosa provasse ad aprirlo.
+  if (!isBuyCreditsModalOpen || !features.payments) return null;
 
   const selectedPackage = PACKAGES.find((p) => p.id === selectedPack)!;
 
@@ -227,7 +229,7 @@ export default function BuyCreditsModal() {
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2">
             <Coins className="w-4 h-4 text-ink-muted" />
-            <h2 className="font-semibold text-ink text-sm">Abbonamenti & Crediti</h2>
+            <h2 className="font-semibold text-ink text-sm">{features.subscriptions ? 'Abbonamenti & Crediti' : 'Ricarica crediti'}</h2>
           </div>
           <button
             onClick={() => setBuyCreditsModalOpen(false)}
@@ -284,7 +286,9 @@ export default function BuyCreditsModal() {
 
         {!clientSecret && (
         <>
-        {/* Subscriptions */}
+        {/* Abbonamenti — accesi separatamente dai pagamenti: un pacchetto
+            crediti incassa prima di spendere, un abbonamento no. */}
+        {features.subscriptions && (
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-semibold text-ink-muted">Abbonamenti</h3>
@@ -331,13 +335,16 @@ export default function BuyCreditsModal() {
             </button>
           )}
         </div>
+        )}
 
-        {/* Divider */}
+        {/* Separatore: ha senso solo se sopra c'e' davvero qualcos'altro. */}
+        {features.subscriptions && (
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-surface-hover" />
           <span className="text-[10px] text-ink-dim font-mono">oppure crediti una tantum</span>
           <div className="flex-1 h-px bg-surface-hover" />
         </div>
+        )}
 
         {/* Packages List */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -349,7 +356,7 @@ export default function BuyCreditsModal() {
                 onClick={() => setSelectedPack(pkg.id)}
                 className={`bg-surface p-4 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${
                   isSelected
-                    ? 'border-zinc-500 bg-surface shadow-sm'
+                    ? 'border-sapphire bg-surface shadow-sm'
                     : 'border-line hover:border-line-strong'
                 }`}
               >
@@ -364,9 +371,14 @@ export default function BuyCreditsModal() {
                   </p>
                 </div>
 
+                {/* Lo stato «Selezionato» era `bg-zinc-100 text-ink`: testo #F8FAFC
+                    su fondo #F4F4F5, contrasto 1,03:1 — illeggibile. Ed era lo
+                    stato predefinito del pacchetto consigliato, quindi lo vedeva
+                    cosi' chiunque aprisse l'acquisto. Ora usa l'accento del
+                    sistema, con testo bianco sopra. */}
                 <div className={`mt-3 w-full py-1.5 rounded-md text-[11px] font-medium flex items-center justify-center gap-1 border ${
                   isSelected
-                    ? 'bg-zinc-100 text-ink border-zinc-100'
+                    ? 'bg-sapphire text-white border-sapphire'
                     : 'bg-surface text-ink-muted border-line'
                 }`}>
                   {isSelected ? <Check className="w-3 h-3" /> : null}

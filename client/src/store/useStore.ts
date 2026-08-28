@@ -89,6 +89,23 @@ export interface UserProfile {
   billingCountry?: string | null;
 }
 
+/**
+ * Interruttori di funzionalita' dichiarati dal server.
+ *
+ * L'interfaccia non deve offrire cio' che non esiste: un pulsante «Ricarica
+ * crediti» che porta a un 404 e' peggio di un pulsante assente. Non e' una
+ * difesa — quella sta sulle rotte — e' onesta' verso chi guarda.
+ *
+ * Il valore iniziale e' tutto SPENTO: finche' il server non ha risposto,
+ * l'interfaccia non promette nulla. Il contrario farebbe comparire i pulsanti
+ * per una frazione di secondo e poi sparire, che e' il modo peggiore.
+ */
+export interface Features {
+  payments: boolean;
+  subscriptions: boolean;
+  imageGeneration: boolean;
+}
+
 export type ToastKind = 'success' | 'error' | 'info';
 
 export interface Toast {
@@ -114,6 +131,12 @@ export function normalizeChat(raw: any, fallbackCharacter?: Character | null): C
 }
 
 interface AppState {
+  // Configurazione dell'istanza
+  features: Features;
+  inviteRequired: boolean;
+  isConfigResolved: boolean;
+  setConfig: (config: { features: Features; inviteRequired: boolean }) => void;
+
   // Layout
   isSidebarCollapsed: boolean;
   isMobileSidebarOpen: boolean;
@@ -165,6 +188,12 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set, get) => ({
+  features: { payments: false, subscriptions: false, imageGeneration: false },
+  inviteRequired: false,
+  isConfigResolved: false,
+  setConfig: ({ features, inviteRequired }) =>
+    set({ features, inviteRequired, isConfigResolved: true }),
+
   isSidebarCollapsed: false,
   isMobileSidebarOpen: false,
   toggleSidebar: () => set((s) => ({ isSidebarCollapsed: !s.isSidebarCollapsed })),
