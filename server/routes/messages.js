@@ -12,9 +12,53 @@ const { screenUserMessage, screenAiOutput, CRISIS_MESSAGE, CRISIS_RESOURCES } = 
 const { moderateText } = require('../services/moderationService');
 const { buildContext, maybeSummarize } = require('../services/contextManager');
 const { generateResponse, generateResponseStream } = require('../services/geminiService');
+const { betaDailyMessageCap } = require('../config/env');
 const { applyDailyReset, applySubscriptionExpiry } = require('../utils/time');
 const { messageLimiter } = require('../middleware/rateLimit');
 const { recordCall } = require('../services/metrics');
+
+/**
+ * Rifiuto della riserva, spiegato.
+ *
+ * «Non puoi mandare questo messaggio» ha tre cause distinte, e all'utente
+ * servono tre azioni distinte: ricaricare, aspettare domani, o niente. Un
+ * messaggio unico le confonderebbe tutte in un vicolo cieco.
+ */
+const allowanceDenied = (reservation) => {
+  if (reservation && reservation.blockedBy === 'dailyCap') {
+    return {
+      status: 429,
+      body: {
+        error: `Hai raggiunto il limite di ${reservation.cap} messaggi al giorno previsto durante la beta. Il conteggio riparte a mezzanotte. I tuoi crediti restano dove sono.`,
+        reason: 'daily_cap',
+        cap: reservation.cap
+      }
+    };
+  }
+  return {
+    status: 402,
+    body: {
+      error: 'Crediti esauriti o limite del tuo piano raggiunto.',
+      reason: 'no_credits'
+    }
+  };
+};
+
+/**
+ * Guasto del modello, spiegato.
+ *
+ * La quota giornaliera del piano gratuito e' condivisa da tutta l'istanza:
+ * quando finisce non e' un guasto ne' una colpa dell'utente, ed e' importante
+ * dirlo — sapere che si riprova domani e' un'informazione, «servizio non
+ * disponibile» non lo e'.
+ */
+const llmFailure = (err) => (
+  err && err.quotaExceeded
+    ? { status: 503, error: 'Abbiamo raggiunto il limite di messaggi disponibili per oggi su questa beta. Riprova domani: nessun credito e stato addebitato.', reason: 'quota_exceeded' }
+    : err && err.safetyBlocked
+      ? { status: 502, error: 'La risposta e stata interrotta dai filtri di sicurezza del modello. Nessun credito e stato addebitato.', reason: 'safety' }
+      : { status: 502, error: 'Il servizio AI non e momentaneamente disponibile. Nessun credito e stato addebitato.', reason: 'llm_error' }
+);
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -77,10 +121,10 @@ router.post('/', requireAuth, messageLimiter, validate(sendMessageSchema), async
     //    questo, N richieste simultanee superavano tutte il controllo e
     //    ricevevano tutte una risposta pagandone solo alcune (S1-1, S1-2).
     reservation = await reserveAllowance(userId, req.user.subscription, 'message');
-    if (!reservation) {
-      return res.status(402).json({
-        error: 'Crediti esauriti o limite giornaliero raggiunto per il tuo piano. Effettua una ricarica o aggiorna il tuo piano.'
-      });
+    if (!reservation || reservation.blockedBy) {
+      const denied = allowanceDenied(reservation);
+      reservation = null;
+      return res.status(denied.status).json(denied.body);
     }
 
     // 5. Messaggio dell'utente
@@ -96,7 +140,8 @@ router.post('/', requireAuth, messageLimiter, validate(sendMessageSchema), async
       aiResult = await generateResponse(context, character.name);
     } catch (llmErr) {
       recordCall('llm', { ok: false });
-      req.log.error({ err: llmErr.message, chatId }, 'Chiamata al modello fallita');
+      const failure = llmFailure(llmErr);
+      req.log.error({ err: llmErr.message, chatId, reason: failure.reason }, 'Chiamata al modello fallita');
 
       // RIMBORSO: la richiesta non è stata servita, quindi non si paga.
       const refunded = await reservation.refund();
@@ -107,8 +152,9 @@ router.post('/', requireAuth, messageLimiter, validate(sendMessageSchema), async
       // cronologia come una bolla rossa (S1-17).
       await Chat.findByIdAndUpdate(chatId, { $inc: { messageCount: 1 }, lastMessageAt: new Date() });
 
-      return res.status(502).json({
-        error: 'Il servizio AI non è momentaneamente disponibile. Nessun credito è stato addebitato.',
+      return res.status(failure.status).json({
+        error: failure.error,
+        reason: failure.reason,
         userMessage,
         user: {
           credits: refunded ? refunded.credits : req.user.credits,
@@ -238,10 +284,10 @@ router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema),
     }
 
     reservation = await reserveAllowance(userId, req.user.subscription, 'message');
-    if (!reservation) {
-      return res.status(402).json({
-        error: 'Crediti esauriti o limite giornaliero raggiunto per il tuo piano. Effettua una ricarica o aggiorna il tuo piano.'
-      });
+    if (!reservation || reservation.blockedBy) {
+      const denied = allowanceDenied(reservation);
+      reservation = null;
+      return res.status(denied.status).json(denied.body);
     }
 
     const userMessage = await Message.create({ chatId, role: 'user', content });
@@ -276,11 +322,9 @@ router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema),
       });
     } catch (llmErr) {
       recordCall('llm', { ok: false });
-      req.log.error({ err: llmErr.message, chatId, safetyBlocked: !!llmErr.safetyBlocked }, 'Streaming del modello fallito');
-      const message = llmErr.safetyBlocked
-        ? 'La risposta è stata interrotta dai filtri di sicurezza del modello. Nessun credito è stato addebitato.'
-        : 'Il servizio AI non è momentaneamente disponibile. Nessun credito è stato addebitato.';
-      return fail(502, message);
+      const failure = llmFailure(llmErr);
+      req.log.error({ err: llmErr.message, chatId, reason: failure.reason }, 'Streaming del modello fallito');
+      return fail(failure.status, failure.error);
     }
 
     recordCall('llm', { ok: true, costEur: aiResult.cost });
@@ -368,8 +412,10 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
     }
 
     reservation = await reserveAllowance(userId, req.user.subscription, 'message');
-    if (!reservation) {
-      return res.status(402).json({ error: 'Crediti esauriti o limite giornaliero raggiunto.' });
+    if (!reservation || reservation.blockedBy) {
+      const denied = allowanceDenied(reservation);
+      reservation = null;
+      return res.status(denied.status).json(denied.body);
     }
 
     // La vecchia risposta esce dal contesto prima di rigenerare, altrimenti il
@@ -383,7 +429,8 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
       aiResult = await generateResponse(context, character.name);
     } catch (llmErr) {
       recordCall('llm', { ok: false });
-      req.log.error({ err: llmErr.message, chatId }, 'Rigenerazione fallita');
+      const failure = llmFailure(llmErr);
+      req.log.error({ err: llmErr.message, chatId, reason: failure.reason }, 'Rigenerazione fallita');
 
       // La risposta precedente è già stata rimossa: la si ripristina per non
       // lasciare la conversazione monca.
@@ -393,7 +440,7 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
       });
       await reservation.refund();
       reservation = null;
-      return res.status(502).json({ error: 'Il servizio AI non è momentaneamente disponibile. Nessun credito è stato addebitato.' });
+      return res.status(failure.status).json({ error: failure.error, reason: failure.reason });
     }
 
     recordCall('llm', { ok: true, costEur: aiResult.cost });

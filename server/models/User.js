@@ -287,15 +287,44 @@ async function reserveAllowance(userId, subscription, kind) {
   const cost = isImage ? IMAGE_CREDIT_COST : MESSAGE_CREDIT_COST;
 
   if (subscription === 'free') {
-    const user = await User.findOneAndUpdate(
-      { _id: userId, credits: { $gte: cost } },
-      { $inc: { credits: -cost } },
-      { new: true }
-    );
-    if (!user) return null;
+    /**
+     * Due condizioni in una sola operazione atomica: credito sufficiente E
+     * tetto giornaliero non superato.
+     *
+     * Il tetto protegge la quota GRATUITA di Gemini, che e' per progetto e non
+     * per utente: senza, una persona sola la esaurirebbe per tutti. Metterlo
+     * qui e non in un controllo separato e' obbligatorio — due letture
+     * distinte lascerebbero la stessa finestra di concorrenza che
+     * `reserveAllowance` esiste per chiudere.
+     */
+    const { betaDailyMessageCap } = require('../config/env');
+    const cap = isImage ? 0 : betaDailyMessageCap();
+
+    const filter = { _id: userId, credits: { $gte: cost } };
+    const update = { $inc: { credits: -cost } };
+    if (cap > 0) {
+      filter.dailyMessageCount = { $lt: cap };
+      update.$inc.dailyMessageCount = 1;
+    }
+
+    const user = await User.findOneAndUpdate(filter, update, { new: true });
+    if (!user) {
+      // Distingue le due ragioni del rifiuto: «hai finito i crediti» e «hai
+      // raggiunto il tetto di oggi» richiedono all'utente azioni diverse.
+      if (cap > 0) {
+        const current = await User.findById(userId).select('credits dailyMessageCount').lean();
+        if (current && current.credits >= cost && current.dailyMessageCount >= cap) {
+          return { blockedBy: 'dailyCap', cap };
+        }
+      }
+      return null;
+    }
+
+    const undo = { $inc: { credits: cost } };
+    if (cap > 0) undo.$inc.dailyMessageCount = -1;
     return {
       user,
-      refund: () => User.findByIdAndUpdate(userId, { $inc: { credits: cost } }, { new: true })
+      refund: () => User.findByIdAndUpdate(userId, undo, { new: true })
     };
   }
 

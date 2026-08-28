@@ -55,6 +55,8 @@ export function resetStore(partial: Record<string, unknown> = {}) {
     isAuthResolved: true,
     isAuthModalOpen: false,
     isBuyCreditsModalOpen: false,
+    isFeedbackModalOpen: false,
+    feedbackKind: 'review' as const,
     isReportModalOpen: false,
     reportTarget: null,
     chats: [],

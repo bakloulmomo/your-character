@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, Compass, Search, Sparkles, Trash2, MoreHorizontal,
-  ChevronsLeft, ChevronsRight, LogOut, Settings, User as UserIcon, Coins, X, ShieldCheck
+  ChevronsLeft, ChevronsRight, LogOut, Settings, User as UserIcon, Coins, X, ShieldCheck, MessageSquareHeart
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useChats } from '../hooks/useChats';
@@ -17,7 +17,7 @@ export default function Sidebar() {
   const {
     user, logout, isSidebarCollapsed, toggleSidebar,
     isMobileSidebarOpen, setMobileSidebarOpen,
-    setAuthModalOpen, setBuyCreditsModalOpen, features
+    setAuthModalOpen, setBuyCreditsModalOpen, features, setFeedbackModalOpen
   } = useStore();
 
   const { chats, status, deleteChat } = useChats();
@@ -272,6 +272,19 @@ export default function Sidebar() {
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               Passa a Premium
+            </button>
+          )}
+
+          {/* Durante la beta il canale di feedback e' la funzione piu'
+              importante dopo la chat: e' l'unico modo per sapere se le persone
+              tornerebbero. Sta in fondo, visibile ma non invadente. */}
+          {user && !collapsed && !features.payments && (
+            <button
+              onClick={() => setFeedbackModalOpen(true, 'review')}
+              className="btn-secondary mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs"
+            >
+              <MessageSquareHeart className="h-3.5 w-3.5" aria-hidden="true" />
+              Dicci cosa ne pensi
             </button>
           )}
 

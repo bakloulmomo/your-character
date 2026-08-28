@@ -5,6 +5,7 @@ import Toaster from './ui/Toaster';
 import AuthModal from './AuthModal';
 import BuyCreditsModal from './BuyCreditsModal';
 import ReportModal from './ReportModal';
+import FeedbackModal from './FeedbackModal';
 import CookieBanner from './CookieBanner';
 import { useStore } from '../store/useStore';
 
@@ -58,6 +59,7 @@ export default function AppShell() {
       <AuthModal />
       <BuyCreditsModal />
       <ReportModal />
+      <FeedbackModal />
       <Toaster />
       <CookieBanner />
     </div>

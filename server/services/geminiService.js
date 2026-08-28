@@ -53,6 +53,35 @@ const SAFETY_SETTINGS = [
  * vedeva un errore generico di servizio non disponibile e noi non sapevamo che
  * era intervenuto un blocco.
  */
+/**
+ * Quota giornaliera del piano gratuito esaurita.
+ *
+ * Il piano gratuito di Gemini ha un tetto di richieste al giorno, condiviso da
+ * tutti gli utenti dell'istanza. Quando finisce, l'API risponde 429. Senza
+ * distinguerlo, l'utente leggeva «servizio non disponibile» — vero ma inutile:
+ * non sa se riprovare fra un minuto o domani. E chi gestisce l'app non sapeva
+ * che era arrivato al tetto.
+ */
+class QuotaExceededError extends Error {
+  constructor() {
+    super('Quota giornaliera del piano gratuito esaurita');
+    this.name = 'QuotaExceededError';
+    this.quotaExceeded = true;
+  }
+}
+
+/** Riconosce un 429 fra le varie forme in cui l'SDK lo puo' presentare. */
+function isQuotaError(error) {
+  if (!error) return false;
+  const status = error.status || error.statusCode || error?.response?.status;
+  if (status === 429) return true;
+  const text = `${error.message || ''}`.toLowerCase();
+  return text.includes('429') ||
+         text.includes('quota') ||
+         text.includes('resource_exhausted') ||
+         text.includes('rate limit');
+}
+
 class SafetyBlockedError extends Error {
   constructor(reason) {
     super('La risposta è stata bloccata dai filtri di sicurezza del modello');
@@ -214,6 +243,7 @@ async function generateResponse(context, characterName = 'Character') {
     // Un blocco di sicurezza non è un guasto: risalendo mantiene la propria
     // identità, così la rotta può rispondere all'utente in modo pertinente.
     if (error && error.safetyBlocked) throw error;
+    if (isQuotaError(error)) throw new QuotaExceededError();
     console.error('Gemini API Service Error:', error);
     throw new Error('Impossibile generare la risposta AI al momento');
   }
@@ -266,22 +296,29 @@ async function generateResponseStream(context, characterName, onDelta) {
     safetySettings: SAFETY_SETTINGS
   });
 
-  const streamResult = await withTimeout(
-    model.generateContentStream({
+  let streamResult;
+  try {
+    streamResult = await withTimeout(
+      model.generateContentStream({
       contents: conversationMessages.map((msg) => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content }]
       })),
-      generationConfig: {
-        maxOutputTokens: TARGET_OUTPUT_TOKENS,
-        temperature: 0.75,
-        topK: 40,
-        topP: 0.95
-      }
-    }),
-    LLM_TIMEOUT_MS,
-    'Gemini (streaming)'
-  );
+        generationConfig: {
+          maxOutputTokens: TARGET_OUTPUT_TOKENS,
+          temperature: 0.75,
+          topK: 40,
+          topP: 0.95
+        }
+      }),
+      LLM_TIMEOUT_MS,
+      'Gemini (streaming)'
+    );
+  } catch (error) {
+    if (error && error.safetyBlocked) throw error;
+    if (isQuotaError(error)) throw new QuotaExceededError();
+    throw error;
+  }
 
   let full = '';
   for await (const chunk of streamResult.stream) {
@@ -329,6 +366,8 @@ async function generateSummary(oldMessages) {
 
 module.exports = {
   SafetyBlockedError,
+  QuotaExceededError,
+  isQuotaError,
   SAFETY_SETTINGS,
   generateResponse,
   generateResponseStream,

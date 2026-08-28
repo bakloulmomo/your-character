@@ -196,6 +196,26 @@ const welcomeCredits = () => {
 const betaInviteCode = () => (process.env.BETA_INVITE_CODE || '').trim() || null;
 
 /**
+ * Tetto giornaliero di messaggi per singolo utente.
+ *
+ * Serve a proteggere una risorsa CONDIVISA: il piano gratuito di Gemini
+ * concede un numero fisso di richieste al giorno per l'intero progetto, non
+ * per utente. Senza un tetto individuale, una sola persona particolarmente
+ * presa dalla conversazione esaurirebbe la quota di tutti entro mezzogiorno, e
+ * gli altri troverebbero un'app che non risponde.
+ *
+ * Non e' una limitazione commerciale — i crediti restano quelli — e' una
+ * ripartizione equa di una capacita' che non e' elastica. Vale per gli utenti
+ * gratuiti; chi paga ha i limiti del proprio piano.
+ *
+ * `0` o assente = nessun tetto.
+ */
+const betaDailyMessageCap = () => {
+  const n = Number.parseInt(process.env.BETA_DAILY_MESSAGE_CAP, 10);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+};
+
+/**
  * Validazione fail-fast della configurazione di produzione.
  * Raccoglie TUTTI i problemi e li segnala insieme: un deploy incompleto va
  * scoperto in una sola volta, non un segreto alla volta.
@@ -280,6 +300,7 @@ module.exports = {
   features,
   welcomeCredits,
   betaInviteCode,
+  betaDailyMessageCap,
   isProduction,
   isTest,
   isPlaceholder,

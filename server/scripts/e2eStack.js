@@ -59,10 +59,13 @@ async function main() {
   process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'warn';
   // Risposte deterministiche e fatturabili: servono a verificare l'economia dei
   // crediti (esaurimento → acquisto → ripresa) senza chiamare un modello vero.
-  process.env.AI_MODE = 'stub';
+  process.env.AI_MODE = process.env.AI_MODE || 'stub';
   // Il primo account con questo indirizzo diventa amministratore: è così che il
   // test può aprire la coda di moderazione.
-  process.env.ADMIN_EMAILS = 'staff@e2e.test';
+  process.env.ADMIN_EMAILS = process.env.ADMIN_EMAILS || 'staff@e2e.test';
+  // Tetto giornaliero: protegge la quota gratuita condivisa di Gemini, che e'
+  // per progetto e non per utente. Alto quanto basta a non intralciare i test.
+  process.env.BETA_DAILY_MESSAGE_CAP = process.env.BETA_DAILY_MESSAGE_CAP || '500';
   /**
    * Pagamenti ACCESI qui, spenti nel prodotto.
    *
@@ -75,14 +78,14 @@ async function main() {
    * Il comportamento a interruttori SPENTI è coperto altrove:
    * `tests/features.test.js` sul server e i test dell'interfaccia sul client.
    */
-  process.env.FEATURE_PAYMENTS = 'true';
+  process.env.FEATURE_PAYMENTS = process.env.FEATURE_PAYMENTS || 'true';
   // Chiave segnaposto: il percorso di pagamento resta quello simulato. Un test
   // end-to-end che chiamasse Stripe davvero dipenderebbe dalla rete, sarebbe
   // lento e lascerebbe PaymentIntent veri dietro di se'.
-  process.env.STRIPE_SECRET_KEY = 'sk_test_stripe_sample';
+  process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_stripe_sample';
   // Dieci crediti rendono percorribile l'esaurimento in pochi messaggi: con i
   // cento della beta il test manderebbe cento messaggi per arrivare a zero.
-  process.env.WELCOME_CREDITS = '10';
+  process.env.WELCOME_CREDITS = process.env.WELCOME_CREDITS || '10';
   // I limiti restano attivi (un E2E che gira senza protezioni non verifica
   // l'app reale), ma con una soglia compatibile con esecuzioni ripetute: il
   // percorso registra un account per volta dallo stesso indirizzo.

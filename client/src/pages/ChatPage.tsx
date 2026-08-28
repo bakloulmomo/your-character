@@ -15,7 +15,7 @@ const MAX_LENGTH = 4000;
 export default function ChatPage() {
   const { chatId } = useParams();
   const navigate = useNavigate();
-  const { user, updateCredits, setBuyCreditsModalOpen, setReportModalOpen, notify, features } = useStore();
+  const { user, updateCredits, setBuyCreditsModalOpen, setReportModalOpen, notify, features, setFeedbackModalOpen, token } = useStore();
   const { reload: reloadChats } = useChats();
   const { messages, status, hasMore, loadingOlder, loadOlder, setMessages, reload } = useMessages(chatId);
 
@@ -38,7 +38,10 @@ export default function ChatPage() {
       setBuyCreditsModalOpen(true);
       return;
     }
-    notify('Hai esaurito i crediti della beta. In questa fase non e\' ancora possibile acquistarne altri.', 'info');
+    // Durante la beta non c'e' nulla da comprare, ma c'e' qualcosa da
+    // chiedere: se vuole continuare. E' il momento piu' informativo di tutta
+    // la beta, e lasciarlo passare con un avviso sarebbe uno spreco.
+    setFeedbackModalOpen(true, 'wants_more');
   };
   const [imagePrompt, setImagePrompt] = useState('');
   const [generatingImage, setGeneratingImage] = useState(false);
@@ -105,7 +108,11 @@ export default function ChatPage() {
     requestAnimationFrame(() => scrollToBottom());
 
     try {
-      const token = localStorage.getItem('yc_token');
+      // Lo streaming usa `fetch` diretto, quindi non passa dall'interceptor di
+      // axios: il token va aggiunto a mano. Viene dallo store, non da
+      // localStorage — li' non c'e' piu' nulla da quando la sessione vive nel
+      // cookie httpOnly, e questa riga leggeva sempre null. Funzionava solo
+      // perche' il cookie viaggia da se', il che rendeva il difetto invisibile.
       const response = await fetch('/api/messages/stream', {
         method: 'POST',
         headers: {

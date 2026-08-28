@@ -109,6 +109,7 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/images', require('./routes/images'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/feedback', require('./routes/feedback'));
 app.use('/api/admin', require('./routes/admin'));
 
 // File generati (immagini): serviti staticamente quando l'archiviazione è

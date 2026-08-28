@@ -177,6 +177,10 @@ interface AppState {
   setCookieBanner: (open: boolean, height?: number) => void;
 
   // Modali
+  isFeedbackModalOpen: boolean;
+  /** 'review' se l'utente lo cerca, 'wants_more' quando i crediti finiscono. */
+  feedbackKind: 'review' | 'wants_more' | 'bug';
+  setFeedbackModalOpen: (open: boolean, kind?: 'review' | 'wants_more' | 'bug') => void;
   isBuyCreditsModalOpen: boolean;
   isReportModalOpen: boolean;
   reportTarget: { type: 'character' | 'message' | 'user'; id: string } | null;
@@ -265,6 +269,10 @@ export const useStore = create<AppState>((set, get) => ({
   setCookieBanner: (isCookieBannerOpen, cookieBannerHeight = 0) =>
     set({ isCookieBannerOpen, cookieBannerHeight }),
 
+  isFeedbackModalOpen: false,
+  feedbackKind: 'review',
+  setFeedbackModalOpen: (isFeedbackModalOpen, feedbackKind = 'review') =>
+    set({ isFeedbackModalOpen, feedbackKind }),
   isBuyCreditsModalOpen: false,
   isReportModalOpen: false,
   reportTarget: null,

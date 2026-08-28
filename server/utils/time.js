@@ -19,7 +19,13 @@ function isNewUTCDay(date) {
  * Persists the change so the "range limit rinnovato ogni 24h" actually works.
  */
 async function applyDailyReset(user) {
-  if (!user || user.subscription === 'free') return;
+  if (!user) return;
+  // Gli utenti gratuiti hanno un contatore giornaliero solo quando e' attivo
+  // il tetto della beta; senza, restano governati dai soli crediti.
+  if (user.subscription === 'free') {
+    const { betaDailyMessageCap } = require('../config/env');
+    if (betaDailyMessageCap() === 0) return;
+  }
   if (!isNewUTCDay(user.lastResetDate)) return;
   user.dailyMessageCount = 0;
   user.dailyImageCount = 0;
