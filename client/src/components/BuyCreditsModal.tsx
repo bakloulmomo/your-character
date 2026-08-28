@@ -1,0 +1,403 @@
+import { useEffect, useState } from 'react';
+import { X, Coins, Check, ShieldCheck, Loader2 } from 'lucide-react';
+import { Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { useStore } from '../store/useStore';
+import { hasFunctionalConsent } from '../lib/consent';
+import api from '../services/api';
+import StripeCheckoutForm from './StripeCheckoutForm';
+
+// La chiave pubblicabile è, appunto, pubblica: identifica l'account Stripe e
+// non autorizza nulla da sola. Se manca, il pagamento con carta non viene
+// nemmeno offerto invece di fingere che funzioni.
+const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
+
+/**
+ * Stripe.js viene caricato PIGRAMENTE (FASE D — S2-6).
+ *
+ * Prima `loadStripe` era invocata a livello di modulo: lo script di terze parti
+ * partiva al caricamento dell'applicazione, prima che chiunque avesse scelto
+ * alcunché nel banner dei cookie. Ora parte in due soli casi:
+ *  · la persona ha dato il consenso funzionale (precaricamento, checkout più
+ *    rapido), oppure
+ *  · sta aprendo il modulo di pagamento — necessario per eseguire il pagamento
+ *    che ha appena richiesto, quindi non subordinato al consenso.
+ */
+let stripeInstance: ReturnType<typeof loadStripe> | null = null;
+const getStripe = () => {
+  if (!STRIPE_PUBLISHABLE_KEY) return null;
+  if (!stripeInstance) stripeInstance = loadStripe(STRIPE_PUBLISHABLE_KEY);
+  return stripeInstance;
+};
+const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
+
+const SUBSCRIPTIONS = [
+  {
+    id: 'monthly',
+    name: 'Mensile',
+    price: '€4.99',
+    period: '/mese',
+    perks: ['50 messaggi/giorno', '5 immagini/giorno', 'Nessuna gestione crediti']
+  },
+  {
+    id: 'annual',
+    name: 'Annuale',
+    price: '€49.99',
+    period: '/anno',
+    perks: ['100 messaggi/giorno', '10 immagini/giorno', '2 mesi gratis']
+  }
+];
+
+const PACKAGES = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    credits: 50,
+    price: '€2.99',
+    description: 'Ideale per provare la piattaforma.'
+  },
+  {
+    id: 'popular',
+    name: 'Popular',
+    credits: 150,
+    price: '€4.99',
+    description: 'Per conversazioni giornaliere ed immagini AI.'
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    credits: 600,
+    price: '€14.99',
+    description: 'Massima convenienza per uso intensivo.'
+  }
+];
+
+export default function BuyCreditsModal() {
+  const { isBuyCreditsModalOpen, setBuyCreditsModalOpen, updateCredits, user, setUser } = useStore();
+  const [selectedPack, setSelectedPack] = useState('popular');
+  const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [error, setError] = useState('');
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [awaitingCredits, setAwaitingCredits] = useState(false);
+
+  // Con il consenso funzionale lo script può essere preparato all'apertura del
+  // modale, così il modulo di pagamento compare subito quando serve.
+  useEffect(() => {
+    if (isBuyCreditsModalOpen && hasFunctionalConsent()) getStripe();
+  }, [isBuyCreditsModalOpen]);
+
+  if (!isBuyCreditsModalOpen) return null;
+
+  const selectedPackage = PACKAGES.find((p) => p.id === selectedPack)!;
+
+  /**
+   * Dopo la conferma su Stripe i crediti arrivano dal webhook, che è
+   * asincrono. Si interroga il saldo per qualche secondo invece di dichiarare
+   * un accredito che non è ancora avvenuto.
+   */
+  const pollForCredits = async () => {
+    setAwaitingCredits(true);
+    const startingCredits = user?.credits ?? 0;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        const res = await api.get('/users/me/credits');
+        if (typeof res.data.credits === 'number' && res.data.credits > startingCredits) {
+          updateCredits(res.data.credits);
+          setAwaitingCredits(false);
+          setClientSecret(null);
+          setSuccessMsg('Pagamento completato: crediti accreditati.');
+          setTimeout(() => {
+            setBuyCreditsModalOpen(false);
+            setSuccessMsg('');
+          }, 1800);
+          return;
+        }
+      } catch {
+        // Si continua a interrogare: la conferma può tardare qualche secondo.
+      }
+    }
+
+    setAwaitingCredits(false);
+    setClientSecret(null);
+    setSuccessMsg('Pagamento ricevuto. I crediti compariranno a breve sul tuo saldo.');
+  };
+
+  const handleCheckout = async () => {
+    if (!user) {
+      setError('Effettua l\'accesso per acquistare crediti.');
+      return;
+    }
+    setLoading(true);
+    setSuccessMsg('');
+    setError('');
+    try {
+      const checkout = await api.post('/payments/checkout', { packageId: selectedPack });
+      const { transactionId, mode } = checkout.data;
+
+      // Percorso reale: Stripe restituisce un clientSecret e la carta viene
+      // inserita nel modulo Elements qui sotto.
+      if (checkout.data.clientSecret && mode !== 'mock') {
+        if (!stripeAvailable) {
+          setError('Pagamenti non configurati su questa installazione (manca VITE_STRIPE_PUBLISHABLE_KEY).');
+          return;
+        }
+        setClientSecret(checkout.data.clientSecret);
+        return;
+      }
+
+      if (mode === 'mock' && transactionId) {
+        // Mock mode: settle the payment SERVER-SIDE so credits are actually granted.
+        const confirm = await api.post('/payments/confirm', { transactionId });
+        if (typeof confirm.data.credits === 'number') {
+          updateCredits(confirm.data.credits); // absolute balance from the server
+        }
+        setSuccessMsg('Crediti accreditati con successo!');
+        setTimeout(() => {
+          setBuyCreditsModalOpen(false);
+          setSuccessMsg('');
+        }, 1500);
+      } else {
+        setError('Impossibile avviare il pagamento. Riprova fra poco.');
+      }
+    } catch (err: any) {
+      console.error('Checkout error:', err);
+      setError(err.response?.data?.error || 'Impossibile completare l\'acquisto. Riprova.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubscribe = async (planId: string) => {
+    if (!user) {
+      setError('Effettua l\'accesso per abbonarti.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await api.post('/payments/subscribe', { plan: planId });
+      if (res.data.url) {
+        // `assign` invece dell'assegnazione a `location.href`: stessa cosa, ma
+        // dichiara l'intento di navigare invece di sembrare la modifica di una
+        // variabile globale.
+        window.location.assign(res.data.url); // Stripe Checkout reale
+        return;
+      }
+      if (res.data.subscription) {
+        setUser({ ...user, subscription: res.data.subscription });
+        setSuccessMsg('Abbonamento attivato con successo!');
+        setTimeout(() => {
+          setBuyCreditsModalOpen(false);
+          setSuccessMsg('');
+        }, 1500);
+      }
+    } catch (err: any) {
+      console.error('Subscribe error:', err);
+      setError(err.response?.data?.error || 'Impossibile attivare l\'abbonamento.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await api.post('/payments/cancel-subscription', {});
+      if (user) setUser({ ...user, subscription: 'free' });
+      setSuccessMsg('Abbonamento annullato.');
+      setTimeout(() => setSuccessMsg(''), 1500);
+    } catch (err: any) {
+      console.error('Cancel subscription error:', err);
+      setError(err.response?.data?.error || 'Impossibile annullare l\'abbonamento.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="bg-bg-elevated max-w-lg w-full rounded-xl p-6 border border-line space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-line pb-3">
+          <div className="flex items-center gap-2">
+            <Coins className="w-4 h-4 text-ink-muted" />
+            <h2 className="font-semibold text-ink text-sm">Abbonamenti & Crediti</h2>
+          </div>
+          <button
+            onClick={() => setBuyCreditsModalOpen(false)}
+            className="p-1 rounded text-ink-dim hover:text-ink-muted"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {successMsg && (
+          <div className="p-3 rounded-md bg-surface border border-line text-ink-muted text-xs font-mono text-center">
+            {successMsg}
+          </div>
+        )}
+
+        {error && (
+          <div className="p-3 rounded-md bg-danger/10 border border-danger/40 text-danger text-xs text-center">
+            {error}
+          </div>
+        )}
+
+        {/* Pagamento con carta: sostituisce il listino una volta avviato */}
+        {clientSecret && stripeAvailable && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-line bg-surface p-3 text-xs text-ink-muted">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{selectedPackage.name} · {selectedPackage.credits} crediti</span>
+                <span className="font-mono">{selectedPackage.price}</span>
+              </div>
+            </div>
+
+            {awaitingCredits ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-center">
+                <Loader2 className="h-5 w-5 animate-spin text-ink-muted" />
+                <p className="text-xs text-ink-muted">Pagamento confermato. Stiamo accreditando i crediti…</p>
+                <p className="max-w-xs text-[11px] text-ink-dim">
+                  L'accredito è confermato dal nostro server, non dal browser: può richiedere qualche secondo.
+                </p>
+              </div>
+            ) : (
+              <Elements
+                stripe={getStripe()}
+                options={{ clientSecret, appearance: { theme: 'night', labels: 'floating' } }}
+              >
+                <StripeCheckoutForm
+                  amountLabel={selectedPackage.price}
+                  onSucceeded={pollForCredits}
+                  onCancel={() => setClientSecret(null)}
+                />
+              </Elements>
+            )}
+          </div>
+        )}
+
+        {!clientSecret && (
+        <>
+        {/* Subscriptions */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-ink-muted">Abbonamenti</h3>
+            {user && user.subscription !== 'free' && (
+              <span className="text-[10px] text-success font-mono">Attivo: {user.subscription}</span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {SUBSCRIPTIONS.map((s) => {
+              const isCurrent = user?.subscription === s.id;
+              return (
+                <div key={s.id} className="bg-surface p-4 rounded-lg border border-line flex flex-col justify-between">
+                  <div>
+                    <div className="text-xs font-medium text-ink-muted mb-1">{s.name}</div>
+                    <div className="text-xl font-semibold text-ink mb-2">
+                      {s.price}<span className="text-[11px] text-ink-dim font-normal">{s.period}</span>
+                    </div>
+                    <ul className="space-y-1 mb-3">
+                      {s.perks.map((p) => (
+                        <li key={p} className="text-[11px] text-ink-muted flex items-center gap-1.5">
+                          <Check className="w-3 h-3 text-sapphire-glow shrink-0" />{p}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <button
+                    onClick={() => handleSubscribe(s.id)}
+                    disabled={loading || isCurrent}
+                    className="btn-primary w-full py-1.5 rounded-md text-[11px] font-medium disabled:opacity-50"
+                  >
+                    {isCurrent ? 'Piano attuale' : 'Abbonati'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {user && user.subscription !== 'free' && (
+            <button
+              onClick={handleCancelSubscription}
+              disabled={loading}
+              className="mt-2 text-[11px] text-danger hover:text-danger transition-colors"
+            >
+              Annulla abbonamento
+            </button>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-surface-hover" />
+          <span className="text-[10px] text-ink-dim font-mono">oppure crediti una tantum</span>
+          <div className="flex-1 h-px bg-surface-hover" />
+        </div>
+
+        {/* Packages List */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {PACKAGES.map((pkg) => {
+            const isSelected = selectedPack === pkg.id;
+            return (
+              <div
+                key={pkg.id}
+                onClick={() => setSelectedPack(pkg.id)}
+                className={`bg-surface p-4 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${
+                  isSelected
+                    ? 'border-zinc-500 bg-surface shadow-sm'
+                    : 'border-line hover:border-line-strong'
+                }`}
+              >
+                <div>
+                  <div className="text-xs font-medium text-ink-muted mb-1">{pkg.name}</div>
+                  <div className="text-2xl font-semibold text-ink mb-1.5">{pkg.price}</div>
+                  <div className="text-xs font-mono text-ink-muted mb-2">
+                    +{pkg.credits} CR
+                  </div>
+                  <p className="text-[11px] text-ink-dim leading-snug">
+                    {pkg.description}
+                  </p>
+                </div>
+
+                <div className={`mt-3 w-full py-1.5 rounded-md text-[11px] font-medium flex items-center justify-center gap-1 border ${
+                  isSelected
+                    ? 'bg-zinc-100 text-ink border-zinc-100'
+                    : 'bg-surface text-ink-muted border-line'
+                }`}>
+                  {isSelected ? <Check className="w-3 h-3" /> : null}
+                  {isSelected ? 'Selezionato' : 'Scegli'}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-3 border-t border-line text-xs">
+          {/* Il marchio Stripe compare solo quando Stripe è davvero coinvolto:
+              mostrarlo su un percorso simulato era una dichiarazione falsa. */}
+          <span className="flex items-center gap-1 text-[11px] text-ink-dim">
+            <ShieldCheck className="w-3.5 h-3.5 text-ink-muted" />
+            {stripeAvailable ? 'Pagamento sicuro con Stripe' : 'Modalità sviluppo — nessun pagamento reale'}
+          </span>
+
+          <button
+            onClick={handleCheckout}
+            disabled={loading}
+            id="confirm-checkout-btn"
+            className="btn-primary px-4 py-1.5 rounded-md font-medium text-xs flex items-center gap-1.5"
+          >
+            {loading ? 'Elaborazione...' : 'Conferma Acquisto'}
+          </button>
+        </div>
+        </>
+        )}
+      </div>
+    </div>
+  );
+}

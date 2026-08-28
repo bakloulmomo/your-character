@@ -1,0 +1,27 @@
+# Dipendenze
+node_modules/
+
+# Segreti: i valori veri non entrano mai nel repository.
+# I .env.example, che contengono solo i nomi delle variabili, invece sì.
+.env
+.env.local
+.env.*.local
+
+# Artefatti di build e di test
+dist/
+build/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+coverage/
+
+# File generati a runtime
+server/uploads/
+
+# Preferenze locali dello strumento, non del progetto
+.claude/settings.local.json
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

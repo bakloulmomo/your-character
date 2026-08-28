@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# Artefatti dei test end-to-end: tracce, video e screenshot dei fallimenti.
+# Sono utili sul momento e pesanti da versionare.
+test-results/
+playwright-report/
+blob-report/
+.playwright/

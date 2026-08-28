@@ -1,0 +1,92 @@
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Search as SearchIcon, SearchX } from 'lucide-react';
+import { useCharacters } from '../hooks/useCharacters';
+import CharacterCard from '../components/CharacterCard';
+import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
+
+/**
+ * Pagina di ricerca con indirizzo proprio.
+ *
+ * Prima esistevano due campi di ricerca, entrambi collegati a una variabile che
+ * nessun filtro e nessuna chiamata leggeva mai: digitare non produceva alcun
+ * effetto (S3-1).
+ */
+export default function SearchPage() {
+  const [params, setParams] = useSearchParams();
+  const initial = params.get('q') ?? '';
+  const [term, setTerm] = useState(initial);
+  const [debounced, setDebounced] = useState(initial);
+
+  // L'indirizzo resta la fonte di verità: il termine è condivisibile.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebounced(term.trim());
+      setParams(term.trim() ? { q: term.trim() } : {}, { replace: true });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [term, setParams]);
+
+  const { characters, status, total, reload } = useCharacters({
+    search: debounced,
+    limit: 50,
+    enabled: debounced.length > 0
+  });
+
+  return (
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
+      <h1 className="mb-5 font-display text-2xl font-bold text-ink">Cerca</h1>
+
+      <form onSubmit={(e) => e.preventDefault()} role="search" className="mb-8">
+        <label htmlFor="search-input" className="sr-only">Cerca personaggi per nome, descrizione o tag</label>
+        <div className="relative max-w-xl">
+          <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-dim" aria-hidden="true" />
+          <input
+            id="search-input"
+            type="search"
+            autoFocus
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            placeholder="Nome, descrizione o tag…"
+            className="input-field rounded-full py-3 pl-11"
+          />
+        </div>
+      </form>
+
+      {debounced.length === 0 && (
+        <EmptyState
+          icon={<SearchIcon className="h-7 w-7" />}
+          title="Cosa stai cercando?"
+          description="Scrivi il nome di un personaggio, un argomento o un tag."
+        />
+      )}
+
+      {debounced.length > 0 && status === 'loading' && <CardSkeleton count={4} />}
+
+      {debounced.length > 0 && status === 'error' && (
+        <ErrorState title="Ricerca non riuscita" description="Il server non ha risposto." onRetry={reload} />
+      )}
+
+      {debounced.length > 0 && status === 'ready' && characters.length === 0 && (
+        <EmptyState
+          icon={<SearchX className="h-7 w-7" />}
+          title={`Nessun risultato per "${debounced}"`}
+          description="Nessun personaggio corrisponde. Prova con un altro termine."
+        />
+      )}
+
+      {debounced.length > 0 && status === 'ready' && characters.length > 0 && (
+        <>
+          <p className="mb-4 text-sm text-ink-muted">
+            {total} {total === 1 ? 'risultato' : 'risultati'} per «{debounced}»
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {characters.map((c) => (
+              <CharacterCard key={c._id} character={c} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

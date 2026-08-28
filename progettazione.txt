@@ -1,0 +1,20 @@
+Progettazione your-character
+
+Punto Iniziale: L'Idea
+Idea semplice, creare un App che offre conversazioni con personaggi inventati o esistenti potenziati con l'AI.
+L'utente puo creare e/o parlare con un personaggio pubblico (creato per tutti) o privato (creato dall'utente 
+solo per utilizzo personale dell'utente) con totale sicurezza (senza pero' crittografia E2E).
+Ogni chat tra character-uetnte e' univoca, con storie iniziali potenzialmente uguali o personalizzabili.
+All inizio l'utente ha 10 messaggi gratuiti, poi dopo per ogni messaggio ricevuto, l'utente paga 1 credito all'app 
+e per ogni foto richiesta 10 crediti. Per comprare crediti, ci sono pacchetti esclusivi, esempio 1 pacchetto da 
+100 crediti vale 3,99$, oppure un abbonamento da 6,99$ al mese per tanti messaggi dove si aggiorna il range limit
+ogni 24 ore.
+
+
+0. Stack - Versione Web
+Lo Stack iniziale per un MVP dell'app consigliato sarebbe quello standard client-server iniziale, con frontend in React
+(con possibile versione mobile in Swift e Kotlin) e con server in NodeJS, Express (per API), MongoDB (DB) e Google AI 
+Studio per l'API del modello gemini 3 flash per le conversazioni.
+
+
+

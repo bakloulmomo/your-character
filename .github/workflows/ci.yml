@@ -1,0 +1,153 @@
+# Integrazione continua (FASE E — punto 6).
+#
+# Il progetto ha 215 test lato server, 61 sull'interfaccia e 3 percorsi
+# end-to-end. Finché girano solo su richiesta, girano quando qualcuno se ne
+# ricorda: è la stessa dinamica per cui una guardia di avvio era stata rimossa
+# senza che nessun test se ne accorgesse (vedi la regressione su `server.js`).
+#
+# I lavori sono separati per far vedere subito CHE COSA si è rotto invece di un
+# unico passo rosso, e quelli indipendenti girano in parallelo.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Un nuovo push sullo stesso ramo annulla la verifica precedente: la risposta
+  # che conta è quella sull'ultimo commit.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  server:
+    name: Server — test e audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Installazione dipendenze
+        working-directory: server
+        run: npm ci
+
+      # `mongodb-memory-server` scarica un binario di MongoDB al primo uso:
+      # metterlo in cache evita di riscaricarlo a ogni esecuzione.
+      - name: Cache del binario MongoDB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+
+      - name: Test
+        working-directory: server
+        run: npm test
+
+      - name: Audit delle dipendenze
+        working-directory: server
+        # `--audit-level=high` per non bloccare su segnalazioni minori delle
+        # dipendenze di sviluppo; le vulnerabilità gravi devono fermare tutto.
+        run: npm audit --audit-level=high
+
+  client:
+    name: Client — lint, tipi, build e test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Installazione dipendenze
+        working-directory: client
+        run: npm ci
+
+      - name: Lint
+        working-directory: client
+        run: npm run lint
+
+      - name: Controllo dei tipi
+        working-directory: client
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: client
+        run: npx vite build
+
+      # Fa fallire la build se una classe personalizzata usata nel codice non
+      # esiste nel CSS compilato: è il difetto che aveva prodotto 14 usi di 5
+      # classi inesistenti (S3-19).
+      - name: Verifica delle classi CSS
+        working-directory: client
+        run: npm run check:css
+
+      - name: Test dell'interfaccia
+        working-directory: client
+        run: npm test
+
+      - name: Audit delle dipendenze
+        working-directory: client
+        run: npm audit --audit-level=high
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    # Ha senso eseguirli solo se le parti stanno in piedi: altrimenti
+    # fallirebbero per la stessa ragione, impiegandoci molto di più.
+    needs: [server, client]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Installazione dipendenze del client
+        working-directory: client
+        run: npm ci
+
+      # L'ambiente end-to-end avvia l'API vera: servono anche le dipendenze del
+      # server, incluse quelle di sviluppo (MongoDB in memoria).
+      - name: Installazione dipendenze del server
+        working-directory: server
+        run: npm ci
+
+      - name: Cache del binario MongoDB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+
+      - name: Installazione del browser
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+
+      - name: Percorsi end-to-end
+        working-directory: client
+        run: npm run test:e2e
+
+      # Tracce, video e screenshot dei fallimenti: senza, un test rosso in CI
+      # va riprodotto a mano per capire che cosa sia successo.
+      - name: Diagnostica dei fallimenti
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: client/playwright-report/
+          retention-days: 7

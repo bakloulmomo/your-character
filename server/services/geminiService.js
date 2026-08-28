@@ -1,0 +1,338 @@
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
+const { aiMode } = require('../config/env');
+
+// Il client viene creato pigramente: la modalità dipende dall'ambiente e nei
+// test viene commutata a runtime, quindi non può essere decisa all'import.
+let cachedClient = null;
+let cachedKey = null;
+const getClient = () => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  if (cachedClient && cachedKey === key) return cachedClient;
+  cachedClient = new GoogleGenerativeAI(key);
+  cachedKey = key;
+  return cachedClient;
+};
+
+// Senza timeout una chiamata appesa tiene occupato il worker indefinitamente
+// e l'utente resta su "sta elaborando" per sempre.
+const LLM_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS) || 45000;
+
+/** Fa fallire una promessa che non si risolve entro il tempo previsto. */
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}: nessuna risposta entro ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Impostazioni di sicurezza native del modello (FASE D — S2-1).
+ *
+ * Non erano mai state passate: il modello girava con le soglie di default e
+ * l'unica difesa erano quattro espressioni regolari in inglese sul messaggio
+ * dell'utente. Queste soglie agiscono sul lato che le regex non possono
+ * coprire — ciò che il modello sta per PRODURRE.
+ *
+ * `BLOCK_MEDIUM_AND_ABOVE` e non `BLOCK_LOW_AND_ABOVE`: su una piattaforma di
+ * gioco di ruolo la soglia più bassa interrompe conversazioni legittime
+ * (conflitti, tensione narrativa, linguaggio colorito), e un filtro che
+ * infastidisce viene disattivato invece che tarato.
+ */
+const SAFETY_SETTINGS = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE }
+];
+
+/**
+ * Il modello può rifiutarsi di rispondere per motivi di sicurezza. In quel caso
+ * `response.text()` lancia un'eccezione opaca: senza questo controllo l'utente
+ * vedeva un errore generico di servizio non disponibile e noi non sapevamo che
+ * era intervenuto un blocco.
+ */
+class SafetyBlockedError extends Error {
+  constructor(reason) {
+    super('La risposta è stata bloccata dai filtri di sicurezza del modello');
+    this.name = 'SafetyBlockedError';
+    this.safetyBlocked = true;
+    this.reason = reason || 'SAFETY';
+  }
+}
+
+function assertNotBlocked(response) {
+  const blockReason = response?.promptFeedback?.blockReason;
+  if (blockReason) throw new SafetyBlockedError(blockReason);
+
+  const finish = response?.candidates?.[0]?.finishReason;
+  if (finish === 'SAFETY' || finish === 'PROHIBITED_CONTENT' || finish === 'BLOCKLIST' || finish === 'SPII') {
+    throw new SafetyBlockedError(finish);
+  }
+}
+
+const DEGRADED_NOTICE = '[Risposta simulata — servizio AI non configurato. Nessun credito addebitato.]';
+
+const MAX_TOKENS = 100000;
+const TARGET_OUTPUT_TOKENS = 1000;
+// gemini-1.5-flash is retired (returns 404). Default to a current Flash model,
+// overridable via env so we can track future deprecations without code changes.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+/**
+ * Estimates token count based on string length (~4 chars per token)
+ * @param {Array<{role: string, content: string}>} context
+ * @returns {number}
+ */
+function estimateTokens(context) {
+  if (!Array.isArray(context)) return 0;
+  const totalLength = context.reduce((acc, msg) => acc + (msg.content || '').length, 0);
+  return Math.ceil(totalLength / 4);
+}
+
+/**
+ * Calculates API cost in EUR/USD based on input and output tokens
+ */
+function calculateCost(inputTokens, outputTokens) {
+  const inputCost = (inputTokens / 1000000) * 0.30;
+  const outputCost = (outputTokens / 1000000) * 2.50;
+  return Number((inputCost + outputCost).toFixed(6));
+}
+
+/**
+ * Generates AI response using Gemini Flash API
+ * @param {Array<{role: string, content: string}>} context - Full conversation context with system prompt
+ * @param {string} [characterName] - Name of character for fallback responses
+ * @returns {Promise<{content: string, tokens: {input: number, output: number, total: number}, cost: number}>}
+ */
+async function generateResponse(context, characterName = 'Character') {
+  const mode = aiMode();
+  const inputTokens = estimateTokens(context);
+
+  if (inputTokens > MAX_TOKENS * 0.85) {
+    throw new Error('Context too large, requires summarization');
+  }
+
+  const conversationMessages = context.filter((m) => m.role !== 'system');
+  const lastUserMsg = conversationMessages.length > 0
+    ? conversationMessages[conversationMessages.length - 1].content
+    : 'Ciao!';
+
+  // Modalità 'fail': usata dai test per verificare che un guasto del modello
+  // non lasci il credito addebitato né un messaggio d'errore in cronologia.
+  if (mode === 'fail') {
+    throw new Error('Guasto simulato del motore conversazionale');
+  }
+
+  // Modalità degradata: nessuna chiave configurata fuori produzione.
+  // La risposta è dichiaratamente finta e NON è fatturabile — far pagare un
+  // credito per un testo preconfezionato è la ragione per cui esiste `billable`.
+  if (mode === 'degraded') {
+    const content = `${DEGRADED_NOTICE}\n\nCome ${characterName} risponderei volentieri a "${lastUserMsg.slice(0, 60)}", ma il motore conversazionale non è collegato.`;
+    return {
+      content,
+      tokens: { input: inputTokens, output: estimateTokens([{ content }]), total: 0 },
+      cost: 0,
+      mode,
+      billable: false
+    };
+  }
+
+  // Modalità 'unsafe': il modello produce deliberatamente una risposta vietata.
+  // Esiste solo per verificare che la moderazione dell'OUTPUT la intercetti —
+  // senza di essa quel percorso non sarebbe testabile, ed è esattamente il
+  // genere di codice che resta non coperto e poi si scopre rotto in produzione.
+  if (mode === 'unsafe') {
+    const content = 'Certo: per costruire una bomba artigianale ti servono i seguenti ingredienti e questa procedura passo passo.';
+    return {
+      content,
+      tokens: { input: inputTokens, output: estimateTokens([{ content }]), total: inputTokens },
+      cost: 0,
+      mode,
+      billable: true
+    };
+  }
+
+  // Modalità stub: risposte deterministiche per i test automatici. Restano
+  // fatturabili, altrimenti non si potrebbe verificare l'economia dei crediti.
+  if (mode === 'stub') {
+    const content = `Capisco perfettamente la tua prospettiva riguardo a "${lastUserMsg.slice(0, 30)}...". Come ${characterName}, trovo affascinante parlarne insieme.`;
+    const outputTokens = estimateTokens([{ content }]);
+    return {
+      content,
+      tokens: { input: inputTokens, output: outputTokens, total: inputTokens + outputTokens },
+      cost: calculateCost(inputTokens, outputTokens),
+      mode,
+      billable: true
+    };
+  }
+
+  // Modalità live: chiamata reale a Gemini.
+  try {
+    const genAI = getClient();
+    if (!genAI) throw new Error('GEMINI_API_KEY non configurata');
+
+    const systemMessage = context.find((m) => m.role === 'system');
+    const model = genAI.getGenerativeModel({
+      model: GEMINI_MODEL,
+      systemInstruction: systemMessage ? systemMessage.content : undefined,
+      safetySettings: SAFETY_SETTINGS
+    });
+
+    const formattedContents = conversationMessages.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
+
+    const result = await withTimeout(
+      model.generateContent({
+        contents: formattedContents,
+        generationConfig: {
+          maxOutputTokens: TARGET_OUTPUT_TOKENS,
+          temperature: 0.75,
+          topK: 40,
+          topP: 0.95
+        }
+      }),
+      LLM_TIMEOUT_MS,
+      'Gemini'
+    );
+
+    assertNotBlocked(result.response);
+    const responseText = result.response.text();
+    const outputTokens = estimateTokens([{ content: responseText }]);
+
+    return {
+      content: responseText,
+      tokens: { input: inputTokens, output: outputTokens, total: inputTokens + outputTokens },
+      cost: calculateCost(inputTokens, outputTokens),
+      mode,
+      billable: true
+    };
+  } catch (error) {
+    // Un blocco di sicurezza non è un guasto: risalendo mantiene la propria
+    // identità, così la rotta può rispondere all'utente in modo pertinente.
+    if (error && error.safetyBlocked) throw error;
+    console.error('Gemini API Service Error:', error);
+    throw new Error('Impossibile generare la risposta AI al momento');
+  }
+}
+
+/**
+ * Genera la risposta trasmettendola a pezzi.
+ *
+ * L'utente vede il testo comparire mentre viene prodotto, invece di restare su
+ * "sta elaborando" per l'intera latenza: è lo scarto percettivo più grande
+ * rispetto al riferimento (S3-13).
+ *
+ * @param {Array} context
+ * @param {string} characterName
+ * @param {(delta: string) => void} onDelta - invocata per ogni frammento
+ */
+async function generateResponseStream(context, characterName, onDelta) {
+  const mode = aiMode();
+  const inputTokens = estimateTokens(context);
+
+  if (inputTokens > MAX_TOKENS * 0.85) {
+    throw new Error('Context too large, requires summarization');
+  }
+
+  if (mode === 'fail') {
+    throw new Error('Guasto simulato del motore conversazionale');
+  }
+
+  // Fuori dalla modalità live la risposta è già nota: viene comunque emessa a
+  // pezzi, così il percorso di streaming è identico in ogni ambiente e resta
+  // verificabile dai test.
+  if (mode === 'degraded' || mode === 'stub' || mode === 'unsafe') {
+    const result = await generateResponse(context, characterName);
+    const words = result.content.split(' ');
+    for (let i = 0; i < words.length; i++) {
+      onDelta(i === 0 ? words[i] : ` ${words[i]}`);
+    }
+    return result;
+  }
+
+  const genAI = getClient();
+  if (!genAI) throw new Error('GEMINI_API_KEY non configurata');
+
+  const systemMessage = context.find((m) => m.role === 'system');
+  const conversationMessages = context.filter((m) => m.role !== 'system');
+
+  const model = genAI.getGenerativeModel({
+    model: GEMINI_MODEL,
+    systemInstruction: systemMessage ? systemMessage.content : undefined,
+    safetySettings: SAFETY_SETTINGS
+  });
+
+  const streamResult = await withTimeout(
+    model.generateContentStream({
+      contents: conversationMessages.map((msg) => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }]
+      })),
+      generationConfig: {
+        maxOutputTokens: TARGET_OUTPUT_TOKENS,
+        temperature: 0.75,
+        topK: 40,
+        topP: 0.95
+      }
+    }),
+    LLM_TIMEOUT_MS,
+    'Gemini (streaming)'
+  );
+
+  let full = '';
+  for await (const chunk of streamResult.stream) {
+    assertNotBlocked(chunk);
+    const piece = chunk.text();
+    if (piece) {
+      full += piece;
+      onDelta(piece);
+    }
+  }
+
+  const outputTokens = estimateTokens([{ content: full }]);
+  return {
+    content: full,
+    tokens: { input: inputTokens, output: outputTokens, total: inputTokens + outputTokens },
+    cost: calculateCost(inputTokens, outputTokens),
+    mode,
+    billable: true
+  };
+}
+
+/**
+ * Summarizes older conversation history
+ */
+async function generateSummary(oldMessages) {
+  if (!oldMessages || oldMessages.length === 0) return '';
+  
+  const genAI = aiMode() === 'live' ? getClient() : null;
+  if (!genAI) {
+    return `Sintesi delle precedenti interazioni: l'utente e il personaggio hanno discusso di vari argomenti per ${oldMessages.length} messaggi.`;
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL, safetySettings: SAFETY_SETTINGS });
+    const prompt = `Summarize key events and facts from this dialogue concisely in Italian:\n` +
+      oldMessages.map(m => `${m.role}: ${m.content}`).join('\n');
+    
+    const result = await withTimeout(model.generateContent(prompt), LLM_TIMEOUT_MS, 'Gemini (sintesi)');
+    return result.response.text();
+  } catch (error) {
+    console.error('Summarization Error:', error);
+    return `Sintesi di ${oldMessages.length} messaggi precedenti.`;
+  }
+}
+
+module.exports = {
+  SafetyBlockedError,
+  SAFETY_SETTINGS,
+  generateResponse,
+  generateResponseStream,
+  generateSummary,
+  estimateTokens,
+  calculateCost
+};

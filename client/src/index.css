@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+    letter-spacing: -0.011em;
+  }
+
+  /* Stato di focus visibile su tutto ciò che è raggiungibile da tastiera.
+     Prima non esisteva: navigare senza mouse era impossibile. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-sapphire-glow ring-offset-2 ring-offset-bg;
+  }
+
+  ::selection {
+    @apply bg-sapphire/40 text-ink;
+  }
+}
+
+@layer components {
+  /* Superfici */
+  .glass-panel {
+    background-color: rgba(11, 15, 25, 0.82);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-color: rgba(30, 41, 59, 0.9);
+  }
+
+  .glass-card {
+    background-color: rgba(17, 24, 39, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .card-surface {
+    @apply bg-surface border border-line transition-colors duration-150;
+  }
+
+  .card-surface:hover {
+    @apply bg-surface-hover border-line-strong;
+  }
+
+  /* Bottoni */
+  .btn-primary {
+    @apply bg-sapphire text-white font-medium transition-colors duration-150;
+  }
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-sapphire-hover;
+  }
+  .btn-primary:disabled {
+    @apply opacity-40 cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-surface text-ink-muted border border-line transition-colors duration-150;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    @apply bg-surface-hover text-ink border-line-strong;
+  }
+  .btn-secondary:disabled {
+    @apply opacity-40 cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply text-ink-muted transition-colors duration-150;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    @apply text-ink bg-surface;
+  }
+
+  .input-field {
+    @apply w-full bg-surface-sunken border border-line rounded-xl px-3.5 py-2.5
+           text-sm text-ink placeholder:text-ink-dim outline-none transition-colors;
+  }
+  .input-field:focus {
+    @apply border-sapphire;
+  }
+}
+
+@layer utilities {
+  /* Usata su ogni carosello e mai definita. */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Scrollbar coerente col tema */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2C3B52;
+}
+
+/* Chi ha chiesto meno movimento non deve subirlo. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
