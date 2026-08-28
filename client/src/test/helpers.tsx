@@ -64,6 +64,7 @@ export function resetStore(partial: Record<string, unknown> = {}) {
     // risponda a /api/config.
     features: { payments: false, subscriptions: false, imageGeneration: false },
     inviteRequired: false,
+    paymentsMode: 'mock' as const,
     isConfigResolved: false,
     ...partial
   });

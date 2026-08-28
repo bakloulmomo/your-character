@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { X, Coins, Check, ShieldCheck, Loader2 } from 'lucide-react';
+import { Check, ShieldCheck, Loader2 } from 'lucide-react';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { useStore } from '../store/useStore';
+import Modal from './ui/Modal';
 import { hasFunctionalConsent } from '../lib/consent';
 import api from '../services/api';
 import StripeCheckoutForm from './StripeCheckoutForm';
@@ -73,7 +74,7 @@ const PACKAGES = [
 ];
 
 export default function BuyCreditsModal() {
-  const { isBuyCreditsModalOpen, setBuyCreditsModalOpen, updateCredits, user, setUser, features } = useStore();
+  const { isBuyCreditsModalOpen, setBuyCreditsModalOpen, updateCredits, user, setUser, features, paymentsMode } = useStore();
   const [selectedPack, setSelectedPack] = useState('popular');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -89,7 +90,7 @@ export default function BuyCreditsModal() {
 
   // Seconda barriera, dopo quella sulle rotte: se i pagamenti sono spenti il
   // modale non si apre nemmeno se qualcosa provasse ad aprirlo.
-  if (!isBuyCreditsModalOpen || !features.payments) return null;
+  if (!features.payments) return null;
 
   const selectedPackage = PACKAGES.find((p) => p.id === selectedPack)!;
 
@@ -221,23 +222,20 @@ export default function BuyCreditsModal() {
     }
   };
 
+  /**
+   * Anche questo passa dal Modal condiviso: stesso difetto di ReportModal —
+   * nessun ruolo, nessuna chiusura con Esc, focus non intrappolato ne'
+   * restituito. Su una finestra che chiede i dati di una carta, essere
+   * inutilizzabile da tastiera non e' un dettaglio.
+   */
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-bg-elevated max-w-lg w-full rounded-xl p-6 border border-line space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-line pb-3">
-          <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-ink-muted" />
-            <h2 className="font-semibold text-ink text-sm">{features.subscriptions ? 'Abbonamenti & Crediti' : 'Ricarica crediti'}</h2>
-          </div>
-          <button
-            onClick={() => setBuyCreditsModalOpen(false)}
-            className="p-1 rounded text-ink-dim hover:text-ink-muted"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <Modal
+      open={isBuyCreditsModalOpen}
+      onClose={() => setBuyCreditsModalOpen(false)}
+      title={features.subscriptions ? 'Abbonamenti e crediti' : 'Ricarica crediti'}
+      size="lg"
+    >
+      <div className="max-h-[70vh] space-y-4 overflow-y-auto">
 
         {successMsg && (
           <div className="p-3 rounded-md bg-surface border border-line text-ink-muted text-xs font-mono text-center">
@@ -395,7 +393,10 @@ export default function BuyCreditsModal() {
               mostrarlo su un percorso simulato era una dichiarazione falsa. */}
           <span className="flex items-center gap-1 text-[11px] text-ink-dim">
             <ShieldCheck className="w-3.5 h-3.5 text-ink-muted" />
-            {stripeAvailable ? 'Pagamento sicuro con Stripe' : 'Modalità sviluppo — nessun pagamento reale'}
+            {/* La fonte e' il server, non la presenza di una chiave nel client:
+                sono due informazioni diverse, e usare la seconda faceva
+                comparire il marchio Stripe su un pagamento simulato. */}
+            {paymentsMode === 'live' ? 'Pagamento sicuro con Stripe' : 'Modalità sviluppo — nessun pagamento reale'}
           </span>
 
           <button
@@ -410,6 +411,6 @@ export default function BuyCreditsModal() {
         </>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

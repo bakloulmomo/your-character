@@ -63,6 +63,26 @@ async function main() {
   // Il primo account con questo indirizzo diventa amministratore: è così che il
   // test può aprire la coda di moderazione.
   process.env.ADMIN_EMAILS = 'staff@e2e.test';
+  /**
+   * Pagamenti ACCESI qui, spenti nel prodotto.
+   *
+   * Stessa ragione di `jest.setup.js`: il percorso completo — crediti che si
+   * esauriscono, acquisto, conversazione che riprende — è l'unico test che
+   * verifica l'economia da un capo all'altro con un browser vero, e quel
+   * codice dovrà funzionare il giorno in cui si riaccende. Un percorso che
+   * nessun test attraversa più si guasta in silenzio.
+   *
+   * Il comportamento a interruttori SPENTI è coperto altrove:
+   * `tests/features.test.js` sul server e i test dell'interfaccia sul client.
+   */
+  process.env.FEATURE_PAYMENTS = 'true';
+  // Chiave segnaposto: il percorso di pagamento resta quello simulato. Un test
+  // end-to-end che chiamasse Stripe davvero dipenderebbe dalla rete, sarebbe
+  // lento e lascerebbe PaymentIntent veri dietro di se'.
+  process.env.STRIPE_SECRET_KEY = 'sk_test_stripe_sample';
+  // Dieci crediti rendono percorribile l'esaurimento in pochi messaggi: con i
+  // cento della beta il test manderebbe cento messaggi per arrivare a zero.
+  process.env.WELCOME_CREDITS = '10';
   // I limiti restano attivi (un E2E che gira senza protezioni non verifica
   // l'app reale), ma con una soglia compatibile con esecuzioni ripetute: il
   // percorso registra un account per volta dallo stesso indirizzo.

@@ -18,6 +18,7 @@ import { useStore } from '../store/useStore';
  */
 export default function CookieBanner() {
   const [visible, setVisible] = useState(false);
+  const features = useStore((s) => s.features);
   const user = useStore((s) => s.user);
   const patchUser = useStore((s) => s.patchUser);
   const setCookieBanner = useStore((s) => s.setCookieBanner);
@@ -69,6 +70,43 @@ export default function CookieBanner() {
   };
 
   if (!visible) return null;
+
+  /**
+   * Durante la beta i pagamenti sono spenti, quindi Stripe.js non viene MAI
+   * caricato e non c'e' alcuno script di terze parti su cui esprimersi.
+   * Restano solo i cookie tecnici, che sono strettamente necessari e per i
+   * quali la normativa richiede informazione, non consenso.
+   *
+   * Chiedere di scegliere fra due opzioni identiche sarebbe teatro: una
+   * domanda finta su una cosa che non accade. Qui si informa e basta — e
+   * l'avviso e' molto piu' corto, il che risolve anche il secondo difetto:
+   * un riquadro alto quasi trecento pixel costringeva il guscio a riservare
+   * altrettanto spazio a piena larghezza, lasciando un vuoto sotto la
+   * conversazione per una scheda che sta in un angolo.
+   */
+  if (!features.payments) {
+    return (
+      <div
+        className="fixed bottom-4 left-4 right-4 z-50 max-w-md md:left-auto md:right-4"
+        role="region"
+        aria-label="Informativa cookie"
+      >
+        <div ref={panelRef} className="glass-panel animate-slide-up flex items-center gap-3 rounded-2xl border p-3 shadow-2xl">
+          <Cookie className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+          <p className="flex-1 text-xs leading-relaxed text-ink-muted">
+            Usiamo solo cookie tecnici, per tenere aperta la sessione.{' '}
+            <Link to="/privacy" className="text-sapphire-glow underline">Dettagli</Link>
+          </p>
+          <button
+            onClick={() => decide(false)}
+            className="btn-secondary shrink-0 rounded-xl px-3 py-1.5 text-xs"
+          >
+            Ho capito
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -26,7 +26,40 @@ describe('CookieBanner', () => {
     vi.clearAllMocks();
     mockedApi.patch.mockResolvedValue({ data: {} });
     localStorage.clear();
-    resetStore();
+    // Il banner con la SCELTA esiste solo quando c'e' davvero uno script di
+    // terze parti su cui esprimersi, cioe' quando i pagamenti sono accesi.
+    // Durante la beta restano solo i cookie tecnici e l'avviso e' informativo.
+    resetStore({ features: { payments: true, subscriptions: false, imageGeneration: false } });
+  });
+
+  describe('durante la beta, senza pagamenti attivi', () => {
+    beforeEach(() => {
+      resetStore({ features: { payments: false, subscriptions: false, imageGeneration: false } });
+    });
+
+    it('non chiede un consenso per Stripe, che non viene mai caricato', async () => {
+      renderWithRouter(<CookieBanner />);
+      await screen.findByRole('region', { name: /informativa cookie/i });
+      expect(screen.queryByRole('button', { name: /consenti anche stripe/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /ho capito/i })).toBeInTheDocument();
+    });
+
+    it('informa e basta: i cookie tecnici non richiedono un consenso', async () => {
+      renderWithRouter(<CookieBanner />);
+      const avviso = await screen.findByRole('region', { name: /informativa cookie/i });
+      expect(avviso).toHaveTextContent(/solo cookie tecnici/i);
+    });
+
+    it('la conferma registra la scelta e chiude l avviso', async () => {
+      renderWithRouter(<CookieBanner />);
+      await userEvent.click(await screen.findByRole('button', { name: /ho capito/i }));
+
+      await waitFor(() =>
+        expect(screen.queryByRole('region', { name: /informativa cookie/i })).not.toBeInTheDocument()
+      );
+      expect(needsDecision()).toBe(false);
+      expect(hasFunctionalConsent()).toBe(false);
+    });
   });
 
   it('compare quando non è mai stata fatta una scelta', async () => {
@@ -61,7 +94,7 @@ describe('CookieBanner', () => {
   it('per un utente autenticato la scelta viene registrata anche sull\'account', async () => {
     // Il GDPR chiede di poter DIMOSTRARE il consenso: nel solo localStorage
     // non è dimostrabile e si perde a ogni cambio di dispositivo.
-    resetStore({ user: testUser() });
+    resetStore({ user: testUser(), features: { payments: true, subscriptions: false, imageGeneration: false } });
     renderWithRouter(<CookieBanner />);
     await userEvent.click(await screen.findByRole('button', { name: /solo tecnici/i }));
 
@@ -73,7 +106,7 @@ describe('CookieBanner', () => {
   });
 
   it('un errore di rete non fa ripresentare il banner all\'infinito', async () => {
-    resetStore({ user: testUser() });
+    resetStore({ user: testUser(), features: { payments: true, subscriptions: false, imageGeneration: false } });
     mockedApi.patch.mockRejectedValue(new Error('rete assente'));
 
     renderWithRouter(<CookieBanner />);

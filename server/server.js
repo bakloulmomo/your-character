@@ -128,10 +128,20 @@ app.use(PUBLIC_PREFIX, express.static(LOCAL_DIR, { maxAge: '7d', fallthrough: tr
  * Espone unicamente interruttori, mai segreti né dettagli di configurazione.
  */
 app.get('/api/config', (req, res) => {
-  const { features, betaInviteCode } = require('./config/env');
+  const { features, betaInviteCode, mockPaymentsEnabled } = require('./config/env');
   res.set('Cache-Control', 'public, max-age=60');
   res.json({
     features: features(),
+    /**
+     * Se il denaro si muove davvero. Lo decide il SERVER, in base alla propria
+     * chiave: prima l'interfaccia lo deduceva dalla presenza di una chiave
+     * pubblicabile lato client, che e' un'informazione diversa. Con una chiave
+     * pubblicabile configurata e un server in modalita' simulata, la finestra
+     * di pagamento esibiva «Pagamento sicuro con Stripe» su un acquisto che
+     * non passava da Stripe — una dichiarazione falsa, ed esattamente il
+     * difetto che il percorso end-to-end era stato scritto per impedire.
+     */
+    paymentsMode: mockPaymentsEnabled() ? 'mock' : 'live',
     // Solo SE serve un invito, mai quale: il modulo deve poter mostrare il
     // campo, non superare il controllo.
     inviteRequired: !!betaInviteCode()

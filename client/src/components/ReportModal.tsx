@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { X, ShieldAlert, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import Modal from './ui/Modal';
 import api from '../services/api';
 
 export default function ReportModal() {
@@ -12,7 +13,7 @@ export default function ReportModal() {
   const [duplicate, setDuplicate] = useState(false);
   const [error, setError] = useState('');
 
-  if (!isReportModalOpen || !reportTarget) return null;
+  if (!reportTarget) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,24 +46,23 @@ export default function ReportModal() {
     }
   };
 
+  /**
+   * Usa il componente Modal condiviso invece di un overlay riscritto a mano.
+   *
+   * Quello precedente non aveva `role="dialog"`, non si chiudeva con Esc, non
+   * intrappolava il focus e non lo restituiva all'elemento di partenza: con la
+   * tastiera era inutilizzabile. La correzione esisteva gia' nel progetto —
+   * `ui/Modal.tsx`, scritto proprio per questo — ed era stata applicata solo ad
+   * AuthModal. Segnalare un contenuto e' il canale con cui gli utenti
+   * proteggono se stessi: deve funzionare per tutti.
+   */
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-bg-elevated max-w-md w-full rounded-xl p-6 border border-line space-y-4 shadow-2xl">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-line pb-3">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-ink-muted" />
-            <h2 className="font-semibold text-ink text-xs">Segnala Contenuto</h2>
-          </div>
-          <button
-            onClick={() => setReportModalOpen(false)}
-            className="p-1 rounded text-ink-dim hover:text-ink-muted"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
+    <Modal
+      open={isReportModalOpen}
+      onClose={() => setReportModalOpen(false)}
+      title="Segnala contenuto"
+    >
+      <div className="space-y-4">
         {submitted ? (
           <div className="p-6 text-center space-y-2">
             <Check className="w-6 h-6 text-ink-muted mx-auto" />
@@ -127,6 +127,6 @@ export default function ReportModal() {
           </form>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

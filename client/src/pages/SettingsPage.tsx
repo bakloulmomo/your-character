@@ -56,7 +56,7 @@ function Card({ title, icon: Icon, description, children, tone = 'normal' }: {
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const { user, setAuthModalOpen, notify, logout, patchUser } = useStore();
+  const { user, setAuthModalOpen, notify, logout, patchUser, features } = useStore();
 
   const [exporting, setExporting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -175,8 +175,15 @@ export default function SettingsPage() {
       <Card
         title="Cookie e script di terze parti"
         icon={Cookie}
-        description="I cookie tecnici tengono aperta la sessione e non sono disattivabili: senza, non potresti restare connesso. L'unica scelta riguarda il caricamento anticipato dello script di pagamento di Stripe."
+        description={
+          features.payments
+            ? "I cookie tecnici tengono aperta la sessione e non sono disattivabili: senza, non potresti restare connesso. L'unica scelta riguarda il caricamento anticipato dello script di pagamento di Stripe."
+            : "Usiamo solo cookie tecnici, per tenere aperta la sessione. Non ci sono script di terze parti attivi, quindi non c'è nulla da autorizzare o rifiutare."
+        }
       >
+        {/* La scelta compare solo se esiste davvero qualcosa su cui scegliere.
+            Due pulsanti che fanno la stessa cosa sarebbero teatro. */}
+        {features.payments && (
         <div className="flex flex-wrap gap-2">
           {[
             { value: false, label: 'Solo tecnici' },
@@ -196,6 +203,7 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+        )}
         {user.cookieConsent?.updatedAt && (
           <p className="mt-3 font-mono text-xs text-ink-dim">
             Scelta registrata il {new Date(user.cookieConsent.updatedAt).toLocaleString('it-IT')}
@@ -213,18 +221,40 @@ export default function SettingsPage() {
         icon={EyeOff}
         description="I personaggi contrassegnati come per adulti restano fuori dalla galleria finché non li attivi. L'attivazione richiede di essere maggiorenne secondo la data di nascita del tuo account."
       >
+        {/* L'interruttore qui sotto e' un vero switch, non una casella di
+            sistema: prima era un quadratino grigio non stilizzato, e
+            sull'impostazione piu' delicata della pagina sembrava un comando
+            lasciato a meta'. `role="switch"` e' anche cio' che uno screen
+            reader deve sentire — acceso o spento, non selezionato o no. */}
         {user.isAdult ? (
           <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-line bg-bg p-4">
             <span className="text-sm text-ink">Mostra i contenuti per adulti</span>
-            <input
-              type="checkbox"
-              checked={user.nsfwEnabled === true}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={user.nsfwEnabled === true}
+              aria-label="Mostra i contenuti per adulti"
               disabled={savingPref === 'nsfw'}
-              onChange={(e) =>
-                savePreference('nsfw', { nsfwEnabled: e.target.checked }, () => {})
+              onClick={() =>
+                savePreference('nsfw', { nsfwEnabled: !(user.nsfwEnabled === true) }, () => {})
               }
-              className="h-5 w-5 accent-sapphire"
-            />
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                user.nsfwEnabled === true ? 'bg-sapphire' : 'bg-surface-hover border border-line'
+              }`}
+            >
+              {/* `left-0` non e' decorativo: senza, un elemento in posizione
+                  assoluta senza coordinate cade nella sua posizione STATICA, e
+                  dentro un <button> — che ha text-align:center per default —
+                  quella posizione e' il centro. Il pallino risultava a meta'
+                  strada e l'interruttore sembrava acceso mentre era spento,
+                  proprio sul comando dei contenuti per adulti. */}
+              <span
+                aria-hidden="true"
+                className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  user.nsfwEnabled === true ? 'translate-x-[22px]' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
           </label>
         ) : (
           <div className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4">
@@ -236,7 +266,10 @@ export default function SettingsPage() {
         )}
       </Card>
 
-      {/* --- Paese ai fini IVA (S2-12) ---------------------------------------- */}
+      {/* --- Paese ai fini IVA (S2-12) ----------------------------------------
+          Aliquota IVA e ricevute esistono solo dove si vende: senza pagamenti
+          attivi sarebbero due schede che parlano di qualcosa che non accade. */}
+      {features.payments && (
       <Card
         title="Paese di fatturazione"
         icon={Globe2}
@@ -256,8 +289,10 @@ export default function SettingsPage() {
           ))}
         </select>
       </Card>
+      )}
 
       {/* --- Ricevute (S2-12) -------------------------------------------------- */}
+      {features.payments && (
       <Card
         title="Pagamenti e ricevute"
         icon={Receipt}
@@ -302,6 +337,7 @@ export default function SettingsPage() {
           </ul>
         )}
       </Card>
+      )}
 
       {/* --- Dati personali ---------------------------------------------------- */}
       <Card

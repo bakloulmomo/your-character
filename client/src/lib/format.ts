@@ -16,9 +16,29 @@ export function initialsOf(name: string): string {
     .join('');
 }
 
-/** Colore stabile derivato dal nome, per gli avatar di ripiego. */
+/**
+ * Colore stabile derivato dal nome, per gli avatar di ripiego.
+ *
+ * La tavolozza precedente andava dal viola al verde al rosso: sei tinte
+ * qualsiasi su un'interfaccia costruita interamente su un solo blu. Il
+ * risultato era che l'elemento piu' saturo di ogni schermata — un quadrato
+ * rosso o verde acceso — non apparteneva al sistema, e sembrava messo li' da
+ * un altro progetto.
+ *
+ * Queste sei restano distinguibili fra loro (servono a riconoscere un
+ * personaggio a colpo d'occhio) ma stanno tutte nell'arco blu-indaco-ciano
+ * intorno all'accento, con luminosita' sufficiente a reggere il testo bianco
+ * sopra. Restano tinte, non decorazioni.
+ */
 export function tintFor(seed: string): string {
-  const palette = ['#2563EB', '#7C3AED', '#0891B2', '#059669', '#D97706', '#DC2626'];
+  const palette = [
+    '#1D4ED8', // blu profondo — l'accento del sistema
+    '#0E7490', // ciano scuro
+    '#4338CA', // indaco
+    '#0369A1', // azzurro d'acciaio
+    '#5B21B6', // viola-indaco, il piu' lontano dell'arco
+    '#155E75'  // petrolio
+  ];
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
   return palette[hash % palette.length];

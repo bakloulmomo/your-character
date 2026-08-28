@@ -134,8 +134,10 @@ interface AppState {
   // Configurazione dell'istanza
   features: Features;
   inviteRequired: boolean;
+  /** 'mock' = pagamento simulato, nessun denaro si muove. Lo dichiara il server. */
+  paymentsMode: 'mock' | 'live';
   isConfigResolved: boolean;
-  setConfig: (config: { features: Features; inviteRequired: boolean }) => void;
+  setConfig: (config: { features: Features; inviteRequired: boolean; paymentsMode: 'mock' | 'live' }) => void;
 
   // Layout
   isSidebarCollapsed: boolean;
@@ -190,9 +192,10 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   features: { payments: false, subscriptions: false, imageGeneration: false },
   inviteRequired: false,
+  paymentsMode: 'mock',
   isConfigResolved: false,
-  setConfig: ({ features, inviteRequired }) =>
-    set({ features, inviteRequired, isConfigResolved: true }),
+  setConfig: ({ features, inviteRequired, paymentsMode }) =>
+    set({ features, inviteRequired, paymentsMode, isConfigResolved: true }),
 
   isSidebarCollapsed: false,
   isMobileSidebarOpen: false,

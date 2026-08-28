@@ -70,7 +70,11 @@ export default function App() {
       .get('/config')
       .then((res) => {
         if (res.data?.features) {
-          setConfig({ features: res.data.features, inviteRequired: !!res.data.inviteRequired });
+          setConfig({
+            features: res.data.features,
+            inviteRequired: !!res.data.inviteRequired,
+            paymentsMode: res.data.paymentsMode === 'live' ? 'live' : 'mock'
+          });
         }
       })
       .catch(() => {

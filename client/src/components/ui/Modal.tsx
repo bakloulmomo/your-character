@@ -71,8 +71,24 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: P
   if (!open) return null;
 
   return (
+    /**
+     * Scala dei livelli di sovrapposizione (dal basso):
+     *   z-20  barra superiore su mobile
+     *   z-30  velo della barra laterale
+     *   z-40  barra laterale
+     *   z-50  banner dei cookie
+     *   z-[60] MODALI  ← qui
+     *   z-[70] notifiche
+     *
+     * Il modale sta SOPRA il banner dei cookie. Con lo stesso livello vinceva
+     * quello piu' in basso nel DOM, cioe' il banner: risultato, il banner
+     * intercettava i click sui comandi del modale e il pulsante di conferma
+     * dell'acquisto era inutilizzabile finche' non si rispondeva ai cookie.
+     * E' lo stesso difetto gia' corretto per il campo di scrittura della chat,
+     * che sui modali era rimasto.
+     */
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div

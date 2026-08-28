@@ -35,7 +35,9 @@ export default function Toaster() {
 
   return (
     <div
-      className="pointer-events-none fixed right-4 top-4 z-[60] flex w-full max-w-sm flex-col gap-2"
+      // z-[70]: le notifiche stanno sopra i modali. Un avviso di errore
+      // nascosto dietro la finestra che l'ha provocato non avvisa nessuno.
+      className="pointer-events-none fixed right-4 top-4 z-[70] flex w-full max-w-sm flex-col gap-2"
       role="status"
       aria-live="polite"
     >
