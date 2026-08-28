@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import api from '../services/api';
+import api, { setAuthToken } from '../services/api';
 
 export interface Creator {
   _id?: string;
@@ -200,15 +200,28 @@ export const useStore = create<AppState>((set, get) => ({
   setMobileSidebarOpen: (isMobileSidebarOpen) => set({ isMobileSidebarOpen }),
 
   user: null,
-  token: localStorage.getItem('yc_token') || null,
+  /**
+   * Il token vive SOLO in memoria.
+   *
+   * Prima stava anche in `localStorage`, quindi era leggibile da qualunque
+   * script eseguito nella pagina: una singola XSS avrebbe consegnato una
+   * sessione valida per sette giorni. La persistenza fra un caricamento e
+   * l'altro e' affidata al cookie `yc_token`, che e' httpOnly — nessuno script
+   * puo' leggerlo, nemmeno il nostro — e viaggia da solo perche' l'API e'
+   * same-origin (vedi la riscrittura in vercel.json).
+   *
+   * Conseguenza voluta: ricaricando la pagina questo valore riparte da null e
+   * la sessione viene ricostruita da /auth/me tramite il cookie.
+   */
+  token: null,
   isAuthResolved: false,
   isAuthModalOpen: false,
   authModalMode: 'login',
 
   setUser: (user) => set({ user }),
   setToken: (token) => {
-    if (token) localStorage.setItem('yc_token', token);
-    else localStorage.removeItem('yc_token');
+    // L'interceptor legge da qui, non dallo store: evita un import circolare.
+    setAuthToken(token);
     set({ token });
   },
   setAuthResolved: (isAuthResolved) => set({ isAuthResolved }),
@@ -222,7 +235,9 @@ export const useStore = create<AppState>((set, get) => ({
     } catch {
       // Si procede comunque con la pulizia locale.
     }
-    localStorage.removeItem('yc_token');
+    // Il cookie viene cancellato dal server, che e' l'unico a poterlo fare:
+    // e' httpOnly. Qui si ripulisce solo lo stato in memoria.
+    setAuthToken(null);
     set({ user: null, token: null, chats: [], chatsStatus: 'idle' });
   },
 

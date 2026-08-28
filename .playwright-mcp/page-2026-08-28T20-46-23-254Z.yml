@@ -1,0 +1,82 @@
+- generic [ref=f18e3]:
+  - complementary "Navigazione principale" [ref=f18e4]:
+    - generic [ref=f18e5]:
+      - link "your-character" [ref=f18e6] [cursor=pointer]:
+        - /url: /
+      - button "Comprimi barra laterale" [ref=f18e8] [cursor=pointer]
+    - generic [ref=f18e12]:
+      - link "Crea" [ref=f18e13] [cursor=pointer]:
+        - /url: /create
+      - search [ref=f18e16]:
+        - generic [ref=f18e17]: Cerca personaggi
+        - searchbox "Cerca personaggi" [ref=f18e19]
+      - navigation [ref=f18e20]:
+        - link "Scopri" [ref=f18e21] [cursor=pointer]:
+          - /url: /
+        - link "Cerca" [ref=f18e26] [cursor=pointer]:
+          - /url: /search
+        - link "I miei personaggi" [ref=f18e31] [cursor=pointer]:
+          - /url: /profile
+    - generic [ref=f18e35]:
+      - heading "Le tue chat" [level=2] [ref=f18e36]
+      - generic [ref=f18e37]:
+        - paragraph [ref=f18e38]: Oggi
+        - list [ref=f18e39]:
+          - listitem [ref=f18e40]:
+            - link "Marcus Vance 12 minuti fa" [ref=f18e41] [cursor=pointer]:
+              - /url: /chat/6a91f0d8230d518359eb319c
+              - generic [ref=f18e42]: MV
+              - generic [ref=f18e43]:
+                - generic [ref=f18e44]: Marcus Vance
+                - generic [ref=f18e45]: 12 minuti fa
+            - button "Azioni per Marcus Vance" [ref=f18e46] [cursor=pointer]
+    - button "@beta_uno 100 crediti" [ref=f18e53] [cursor=pointer]:
+      - generic [ref=f18e54]: B
+      - generic [ref=f18e55]:
+        - generic [ref=f18e56]: "@beta_uno"
+        - generic [ref=f18e57]: 100 crediti
+  - main [ref=f18e59]:
+    - generic [ref=f18e60]:
+      - generic [ref=f18e61]:
+        - paragraph [ref=f18e62]: Ti diamo il benvenuto,
+        - heading "@beta_uno" [level=1] [ref=f18e63]
+      - tablist "Categorie" [ref=f18e64]:
+        - tab "Tutti" [selected] [ref=f18e65] [cursor=pointer]
+        - tab "Assistenti" [ref=f18e66] [cursor=pointer]
+        - tab "Anime" [ref=f18e67] [cursor=pointer]
+        - tab "Gaming" [ref=f18e68] [cursor=pointer]
+        - tab "Fantasy" [ref=f18e69] [cursor=pointer]
+        - tab "Storici" [ref=f18e70] [cursor=pointer]
+        - tab "Roleplay" [ref=f18e71] [cursor=pointer]
+        - tab "Altro" [ref=f18e72] [cursor=pointer]
+      - generic [ref=f18e73]:
+        - heading "In evidenza" [level=2] [ref=f18e74]
+        - generic [ref=f18e75]:
+          - link "Segnala Aria Thorne Aria Thorne @catalogo Coach di scrittura e storytelling per autori e sceneggiatori. scrittura storytelling 0" [ref=f18e76] [cursor=pointer]:
+            - /url: /character/650000000000000000000001
+            - generic [ref=f18e77]:
+              - generic [ref=f18e78]:
+                - generic [ref=f18e79]: AT
+                - button "Segnala Aria Thorne" [ref=f18e80]
+              - heading "Aria Thorne" [level=3] [ref=f18e83]
+              - paragraph [ref=f18e84]: "@catalogo"
+              - paragraph [ref=f18e85]: Coach di scrittura e storytelling per autori e sceneggiatori.
+            - generic [ref=f18e86]:
+              - generic [ref=f18e87]:
+                - generic [ref=f18e88]: scrittura
+                - generic [ref=f18e89]: storytelling
+              - generic [ref=f18e90]: "0"
+          - link "Segnala Marcus Vance Marcus Vance @catalogo Netrunner in una metropoli distopica, sempre a caccia della prossima breccia. cyberpunk roleplay 1" [ref=f18e94] [cursor=pointer]:
+            - /url: /character/650000000000000000000002
+            - generic [ref=f18e95]:
+              - generic [ref=f18e96]:
+                - generic [ref=f18e97]: MV
+                - button "Segnala Marcus Vance" [ref=f18e98]
+              - heading "Marcus Vance" [level=3] [ref=f18e101]
+              - paragraph [ref=f18e102]: "@catalogo"
+              - paragraph [ref=f18e103]: Netrunner in una metropoli distopica, sempre a caccia della prossima breccia.
+            - generic [ref=f18e104]:
+              - generic [ref=f18e105]:
+                - generic [ref=f18e106]: cyberpunk
+                - generic [ref=f18e107]: roleplay
+              - generic [ref=f18e108]: "1"

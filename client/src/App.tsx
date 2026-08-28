@@ -60,7 +60,7 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  const { token, setUser, setAuthResolved, logout, setConfig } = useStore();
+  const { setUser, setAuthResolved, logout, setConfig } = useStore();
 
   // Quali funzioni sono accese su questa istanza. Va chiesto PRIMA di disegnare
   // i comandi: l'alternativa e' mostrare pulsanti che spariscono un istante
@@ -83,11 +83,9 @@ export default function App() {
   // Verifica la sessione all'avvio. Nessun ritardo artificiale: prima c'era un
   // timer fisso di 600 ms indipendente da qualunque caricamento reale (S3-30).
   useEffect(() => {
-    if (!token) {
-      setAuthResolved(true);
-      return;
-    }
-
+    // Si chiede SEMPRE, anche senza token in memoria: dopo un ricaricamento la
+    // sessione vive nel cookie httpOnly, che questo codice non puo' vedere. Un
+    // visitatore anonimo riceve un 401 e prosegue come anonimo.
     api
       .get('/auth/me')
       .then((res) => {
@@ -95,7 +93,7 @@ export default function App() {
       })
       .catch(() => logout())
       .finally(() => setAuthResolved(true));
-  }, [token, setUser, setAuthResolved, logout]);
+  }, [setUser, setAuthResolved, logout]);
 
   return <RouterProvider router={router} />;
 }
