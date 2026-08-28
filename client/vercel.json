@@ -1,15 +1,27 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/:path*" },
+    {
+      "//": "IMPORTANTE — sostituisci l'host con l'URL del tuo backend su Render.",
+      "//2": "Questa riscrittura e' cio' che rende l'API same-origin per il browser:",
+      "//3": "il client chiama /api/... sul proprio dominio e Vercel inoltra al backend.",
+      "//4": "Ne dipendono due cose: il cookie di sessione httpOnly (che con",
+      "//5": "SameSite=Lax non viaggerebbe verso un'altra origine) e la direttiva",
+      "//6": "connect-src 'self' della CSP qui sotto.",
+      "source": "/api/:path*",
+      "destination": "https://your-character-api.onrender.com/api/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
+
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.stripe.com https://*.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
         },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
@@ -17,6 +29,11 @@
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(self \"https://js.stripe.com\")" },
         { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
       ]
+    },
+    {
+      "//": "Gli asset con hash nel nome non cambiano mai: si possono tenere per sempre.",
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     }
   ]
 }

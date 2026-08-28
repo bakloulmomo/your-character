@@ -1,0 +1,59 @@
+# Deploy del backend su Render (piano gratuito).
+#
+# Il piano gratuito sospende il servizio dopo 15 minuti di inattivita': la
+# prima richiesta dopo una pausa attende circa 50 secondi. Su una beta a inviti
+# e' tollerabile — le persone sanno di stare provando qualcosa — ma non lo
+# sarebbe su un lancio pubblico. Passare a un piano a pagamento, o a Fly/Railway,
+# non richiede modifiche al codice: cambia solo l'host nella riscrittura di
+# client/vercel.json.
+services:
+  - type: web
+    name: your-character-api
+    runtime: node
+    plan: free
+    region: frankfurt          # vicino agli utenti italiani
+    rootDir: server
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── Segreti: si inseriscono dal pannello di Render, mai qui ──────────
+      # `sync: false` significa "chiedimelo, non tenerlo nel repository".
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true     # Render ne genera uno casuale al primo deploy
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # ── Origine del frontend: serve a CORS ──────────────────────────────
+      - key: FRONTEND_URL
+        sync: false
+
+      # ── Beta chiusa e gratuita ──────────────────────────────────────────
+      # Tutti gli interruttori restano spenti: il valore predefinito nel codice
+      # e' gia' quello prudente, elencarli qui li rende visibili nel pannello.
+      - key: FEATURE_PAYMENTS
+        value: "false"
+      - key: FEATURE_SUBSCRIPTIONS
+        value: "false"
+      - key: FEATURE_IMAGE_GENERATION
+        value: "false"
+      - key: WELCOME_CREDITS
+        value: "100"
+      - key: BETA_INVITE_CODE
+        sync: false
+
+      # ── Primo moderatore ────────────────────────────────────────────────
+      - key: ADMIN_EMAILS
+        sync: false
+
+      # ── Facoltativi ─────────────────────────────────────────────────────
+      - key: SENTRY_DSN
+        sync: false
+      - key: RESEND_API_KEY      # senza, il recupero password non invia email
+        sync: false

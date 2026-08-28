@@ -41,4 +41,31 @@ async function applySubscriptionExpiry(user) {
   }
 }
 
-module.exports = { isNewUTCDay, applyDailyReset, applySubscriptionExpiry };
+/**
+ * Riattiva un account la cui sospensione a termine e' scaduta.
+ *
+ * `banExpiresAt` veniva scritto quando un amministratore sospendeva un account,
+ * e mostrato all'utente nel messaggio di blocco — ma non veniva letto da
+ * nessuna parte. Una sospensione di sette giorni era quindi perpetua, e la data
+ * comunicata all'utente una promessa che non si avverava. Nessun test se ne era
+ * accorto perche' nessuno arrivava mai all'ottavo giorno.
+ *
+ * Lo stesso schema era gia' risolto correttamente per gli abbonamenti in
+ * `applySubscriptionExpiry`, poche righe piu' sopra: qui non era stato replicato.
+ *
+ * @returns {Promise<boolean>} true se la sospensione e' stata revocata adesso
+ */
+async function applyBanExpiry(user) {
+  if (!user || !user.isBanned) return false;
+  // Una sospensione senza data e' permanente per definizione: non scade.
+  if (!user.banExpiresAt) return false;
+  if (new Date(user.banExpiresAt) > new Date()) return false;
+
+  user.isBanned = false;
+  user.banReason = null;
+  user.banExpiresAt = null;
+  await user.save();
+  return true;
+}
+
+module.exports = { isNewUTCDay, applyDailyReset, applySubscriptionExpiry, applyBanExpiry };

@@ -94,6 +94,31 @@ const transactionSchema = new mongoose.Schema({
   }
 });
 
+/**
+ * Identita' del cliente al momento del pagamento (istantanea).
+ *
+ * Una ricevuta deve bastare a se stessa. Prima i dati del cliente venivano
+ * letti dall'account al momento di generarla: cancellato l'account, la
+ * ricevuta non era piu' producibile — e infatti la cancellazione eliminava
+ * anche le transazioni, distruggendo registri che l'art. 2220 c.c. obbliga a
+ * conservare dieci anni e bucando la numerazione progressiva gia' emessa.
+ *
+ * Con l'istantanea la transazione e' un documento fiscale completo e
+ * indipendente: sopravvive alla cancellazione dell'account, come deve, e il
+ * GDPR lo consente esplicitamente quando esiste un obbligo di legge
+ * (art. 17.3.b). E' anche piu' corretto nel merito: una ricevuta deve riportare
+ * i dati validi QUANDO e' stata emessa, non quelli di oggi.
+ */
+transactionSchema.add({
+  customerSnapshot: {
+    username: { type: String, default: null },
+    email: { type: String, default: null },
+    country: { type: String, default: null }
+  },
+  /** L'account collegato e' stato cancellato: la riga resta per obbligo fiscale. */
+  accountDeletedAt: { type: Date, default: null }
+});
+
 /** Importo in euro, per la sola visualizzazione. La verità resta in centesimi. */
 transactionSchema.virtual('amountEur').get(function() {
   return (this.grossCents || 0) / 100;

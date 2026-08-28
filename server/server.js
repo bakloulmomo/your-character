@@ -63,7 +63,12 @@ app.use(cors({
 // and the signature can never be validated (security-critical).
 app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
 
-app.use(express.json({ limit: '10mb' }));
+// 10 MB erano dimensionati sulle immagini in base64 dentro i documenti, che
+// non esistono piu': ora i binari vanno all'archivio e in database resta l'URL.
+// Un messaggio di chat e' al massimo 4000 caratteri, un personaggio poche
+// migliaia: 256 KB sono abbondanti, e riducono di quaranta volte quanto un
+// singolo client puo' far allocare al processo.
+app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Clerk Middleware (Safely handle mock/test environments)
@@ -84,6 +89,16 @@ if (process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_PUBLISHABLE_KEY.start
  * le voci prodotte da una stessa chiamata, e nessuna redazione dei segreti.
  */
 app.use(requestContext);
+
+/**
+ * Limite generale, applicato a tutta la API prima di ogni rotta.
+ *
+ * Sta DOPO `requestContext` di proposito: una richiesta rifiutata deve
+ * comunque comparire nei log con il suo identificativo, altrimenti un abuso in
+ * corso e' invisibile proprio mentre sta avvenendo.
+ */
+const { globalLimiter } = require('./middleware/rateLimit');
+app.use('/api', globalLimiter);
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

@@ -192,11 +192,30 @@ router.delete('/me', requireAuth, async (req, res) => {
       );
     }
 
+    /**
+     * Le TRANSAZIONI non vengono cancellate.
+     *
+     * L'informativa privacy dichiara che «le transazioni sono conservate per
+     * l'obbligo fiscale decennale», ma il codice eseguiva `deleteMany`: faceva
+     * l'opposto di cio' che il documento pubblicato prometteva, distruggeva
+     * registri che l'art. 2220 c.c. obbliga a conservare dieci anni, e bucava
+     * la numerazione progressiva delle ricevute gia' emesse.
+     *
+     * Vengono invece marcate: l'account e' sparito, la riga contabile resta.
+     * L'identita' fiscale necessaria e' gia' nell'istantanea salvata al momento
+     * del pagamento, quindi la ricevuta resta emettibile senza dipendere da un
+     * account che non c'e' piu'. Il GDPR lo consente quando esiste un obbligo
+     * di legge (art. 17.3.b).
+     */
+    await Transaction.updateMany(
+      { userId, accountDeletedAt: null },
+      { accountDeletedAt: new Date() }
+    );
+
     await Promise.all([
       Message.deleteMany({ chatId: { $in: chatIds } }),
       Chat.deleteMany({ userId }),
       Character.deleteMany({ createdBy: userId, isPublic: false }),
-      Transaction.deleteMany({ userId }),
       Report.deleteMany({ reporterId: userId }),
       User.findByIdAndDelete(userId)
     ]);

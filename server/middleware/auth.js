@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { getAuth } = require('@clerk/express');
 const User = require('../models/User');
 const { jwtSecret, isTest, welcomeCredits } = require('../config/env');
+const { applyBanExpiry } = require('../utils/time');
 
 /**
  * Estrae il token dalla richiesta: header Authorization o cookie di sessione.
@@ -32,6 +33,9 @@ const resolveUser = async (req) => {
         // La versione nel token deve corrispondere a quella dell'account:
         // dopo un logout il vecchio token non vale più nulla.
         if (user && (decoded.tv || 0) === (user.tokenVersion || 0)) {
+          // Una sospensione a termine scaduta viene revocata qui, al primo
+          // accesso successivo: e' il punto in cui l'utente si ripresenta.
+          await applyBanExpiry(user);
           return user;
         }
       }
@@ -51,6 +55,7 @@ const resolveUser = async (req) => {
 
   if (clerkId) {
     let user = await User.findOne({ clerkId });
+    if (user) await applyBanExpiry(user);
     if (!user) {
       user = await User.create({
         clerkId,

@@ -75,6 +75,16 @@ const resolveCountry = (user, declared) => {
  * Numero progressivo di ricevuta, assegnato una sola volta per transazione e
  * solo a pagamento riuscito. La sequenza è per anno.
  */
+/**
+ * Istantanea dell'identita' del cliente, scritta sulla transazione al momento
+ * del pagamento. Rende la ricevuta un documento indipendente dall'account.
+ */
+const snapshotOf = (user, country) => ({
+  username: user.username || null,
+  email: user.email || null,
+  country: country || null
+});
+
 async function assignInvoiceNumber(transaction) {
   if (!transaction || transaction.invoiceNumber) return transaction;
   const year = new Date().getFullYear();
@@ -128,6 +138,7 @@ router.post('/checkout', requireFeature('payments'), requireAuth, checkoutLimite
         vatRate: vat.vatRate,
         country: vat.country,
         currency: pkg.currency,
+        customerSnapshot: snapshotOf(req.user, vat.country),
         stripePaymentIntentId: `pi_mock_${Date.now()}`,
         status: 'pending',
         idempotencyKey
@@ -168,6 +179,7 @@ router.post('/checkout', requireFeature('payments'), requireAuth, checkoutLimite
       vatRate: vat.vatRate,
       country: vat.country,
       currency: pkg.currency,
+      customerSnapshot: snapshotOf(req.user, vat.country),
       stripePaymentIntentId: paymentIntent.id,
       status: 'pending',
       idempotencyKey
@@ -446,6 +458,7 @@ router.post('/subscribe', requireFeature('subscriptions'), requireAuth, async (r
         vatRate: subVat.vatRate,
         country: subVat.country,
         currency: 'eur',
+        customerSnapshot: snapshotOf(req.user, subVat.country),
         status: 'completed',
         completedAt: now
       });
@@ -596,10 +609,13 @@ router.get('/receipt/:transactionId', requireAuth, async (req, res) => {
       },
       sellerConfigured: seller.configured,
       provisional: !seller.configured,
+      // Dall'istantanea salvata al pagamento, non dall'account di oggi: una
+      // ricevuta deve riportare i dati validi quando e' stata emessa, e deve
+      // restare emettibile anche se l'account nel frattempo non esiste piu'.
       customer: {
-        username: req.user.username,
-        email: req.user.email,
-        country: tx.country
+        username: tx.customerSnapshot?.username ?? req.user.username,
+        email: tx.customerSnapshot?.email ?? req.user.email,
+        country: tx.customerSnapshot?.country ?? tx.country
       },
       line: {
         description: tx.type === 'subscription' ? 'Abbonamento your-character' : `Ricarica di ${tx.credits} crediti`,

@@ -72,7 +72,27 @@ const exportLimiter = build({
   message: 'Puoi esportare i tuoi dati al massimo 3 volte all ora.'
 });
 
+/**
+ * Limite GENERALE su tutta la API.
+ *
+ * I limitatori qui sopra coprono le rotte che costano denaro. Ma le rotte di
+ * sola lettura — la galleria, l'elenco chat, /auth/me — non ne avevano alcuno:
+ * un solo client poteva interrogarle in ciclo senza incontrare nulla. Non
+ * costano una chiamata al modello, costano database e banda, e con un piano
+ * gratuito sono comunque la risorsa piu' scarsa che c'e'.
+ *
+ * La soglia e' deliberatamente alta: deve fermare uno script, non una persona.
+ * Una sessione umana intensa fa qualche decina di richieste al minuto; 240 e'
+ * un ordine di grandezza sopra, quindi chi la incontra non stava navigando.
+ */
+const globalLimiter = build({
+  windowMs: 60 * 1000,
+  max: Number.parseInt(process.env.GLOBAL_RATE_MAX, 10) || 240,
+  message: 'Troppe richieste in poco tempo. Attendi qualche istante.'
+});
+
 module.exports = {
+  globalLimiter,
   messageLimiter,
   imageLimiter,
   createCharacterLimiter,

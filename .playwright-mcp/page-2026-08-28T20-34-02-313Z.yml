@@ -1,0 +1,264 @@
+- generic [ref=f12e3]:
+  - complementary "Navigazione principale" [ref=f12e4]:
+    - generic [ref=f12e5]:
+      - link "your-character" [ref=f12e6] [cursor=pointer]:
+        - /url: /
+      - button "Comprimi barra laterale" [ref=f12e8] [cursor=pointer]
+    - generic [ref=f12e12]:
+      - link "Crea" [ref=f12e13] [cursor=pointer]:
+        - /url: /create
+      - search [ref=f12e16]:
+        - generic [ref=f12e17]: Cerca personaggi
+        - searchbox "Cerca personaggi" [ref=f12e19]
+      - navigation [ref=f12e20]:
+        - link "Scopri" [ref=f12e21] [cursor=pointer]:
+          - /url: /
+        - link "Cerca" [ref=f12e26] [cursor=pointer]:
+          - /url: /search
+    - generic [ref=f12e31]:
+      - heading "Le tue chat" [level=2] [ref=f12e32]
+      - paragraph [ref=f12e33]:
+        - button "Accedi" [ref=f12e34] [cursor=pointer]
+        - text: per ritrovare qui le tue conversazioni.
+    - generic [ref=f12e36]:
+      - button "Accedi" [ref=f12e37] [cursor=pointer]
+      - button "Registrati" [ref=f12e38] [cursor=pointer]
+  - main [ref=f12e40]:
+    - generic [ref=f12e41]:
+      - generic [ref=f12e42]:
+        - paragraph [ref=f12e43]: Ti diamo il benvenuto,
+        - heading "Viandante" [level=1] [ref=f12e44]
+      - tablist "Categorie" [ref=f12e45]:
+        - tab "Tutti" [selected] [ref=f12e46] [cursor=pointer]
+        - tab "Assistenti" [ref=f12e47] [cursor=pointer]
+        - tab "Anime" [ref=f12e48] [cursor=pointer]
+        - tab "Gaming" [ref=f12e49] [cursor=pointer]
+        - tab "Fantasy" [ref=f12e50] [cursor=pointer]
+        - tab "Storici" [ref=f12e51] [cursor=pointer]
+        - tab "Roleplay" [ref=f12e52] [cursor=pointer]
+        - tab "Altro" [ref=f12e53] [cursor=pointer]
+      - generic [ref=f12e54]:
+        - heading "In evidenza" [level=2] [ref=f12e55]
+        - generic [ref=f12e56]:
+          - link "Segnala Aria Thorne Aria Thorne @catalogo Coach di scrittura e storytelling per autori e sceneggiatori. scrittura storytelling 0" [ref=f12e57] [cursor=pointer]:
+            - /url: /character/650000000000000000000001
+            - generic [ref=f12e58]:
+              - generic [ref=f12e59]:
+                - generic [ref=f12e91]: AT
+                - button "Segnala Aria Thorne" [ref=f12e60]
+              - heading "Aria Thorne" [level=3] [ref=f12e63]
+              - paragraph [ref=f12e64]: "@catalogo"
+              - paragraph [ref=f12e65]: Coach di scrittura e storytelling per autori e sceneggiatori.
+            - generic [ref=f12e66]:
+              - generic [ref=f12e67]:
+                - generic [ref=f12e68]: scrittura
+                - generic [ref=f12e69]: storytelling
+              - generic [ref=f12e70]: "0"
+          - link "Segnala Marcus Vance Marcus Vance @catalogo Netrunner in una metropoli distopica, sempre a caccia della prossima breccia. cyberpunk roleplay 0" [ref=f12e74] [cursor=pointer]:
+            - /url: /character/650000000000000000000002
+            - generic [ref=f12e75]:
+              - generic [ref=f12e76]:
+                - generic [ref=f12e92]: MV
+                - button "Segnala Marcus Vance" [ref=f12e77]
+              - heading "Marcus Vance" [level=3] [ref=f12e80]
+              - paragraph [ref=f12e81]: "@catalogo"
+              - paragraph [ref=f12e82]: Netrunner in una metropoli distopica, sempre a caccia della prossima breccia.
+            - generic [ref=f12e83]:
+              - generic [ref=f12e84]:
+                - generic [ref=f12e85]: cyberpunk
+                - generic [ref=f12e86]: roleplay
+              - generic [ref=f12e87]: "0"
+  - dialog "Crea un account" [ref=f12e94]:
+    - generic [ref=f12e95]:
+      - heading "Crea un account" [level=2] [ref=f12e96]
+      - button "Chiudi" [active] [ref=f12e97] [cursor=pointer]
+    - generic [ref=f12e101]:
+      - tablist [ref=f12e102]:
+        - tab "Accedi" [ref=f12e103] [cursor=pointer]
+        - tab "Registrati" [selected] [ref=f12e104] [cursor=pointer]
+      - generic [ref=f12e105]:
+        - generic [ref=f12e106]:
+          - generic [ref=f12e107]: Email
+          - textbox "Email" [ref=f12e108]:
+            - /placeholder: nome@esempio.com
+        - generic [ref=f12e109]:
+          - generic [ref=f12e110]: Nome utente
+          - textbox "Nome utente" [ref=f12e111]:
+            - /placeholder: mario_rossi
+          - paragraph [ref=f12e112]: Lettere, numeri e underscore. Da 3 a 30 caratteri.
+        - generic [ref=f12e113]:
+          - generic [ref=f12e114]: Password
+          - generic [ref=f12e116]:
+            - textbox "Password" [ref=f12e117]:
+              - /placeholder: ••••••••
+            - button "Mostra password" [ref=f12e118] [cursor=pointer]
+        - list [ref=f12e122]:
+          - listitem [ref=f12e123]: Almeno 8 caratteri
+          - listitem [ref=f12e126]: Una lettera maiuscola
+          - listitem [ref=f12e129]: Un numero
+        - group "Data di nascita" [ref=f12e132]:
+          - paragraph [ref=f12e134]: Serve a verificare che tu sia maggiorenne. Non è mai visibile agli altri.
+          - generic [ref=f12e135]:
+            - combobox "Giorno" [ref=f12e136]:
+              - option "Giorno" [selected]
+              - option "1"
+              - option "2"
+              - option "3"
+              - option "4"
+              - option "5"
+              - option "6"
+              - option "7"
+              - option "8"
+              - option "9"
+              - option "10"
+              - option "11"
+              - option "12"
+              - option "13"
+              - option "14"
+              - option "15"
+              - option "16"
+              - option "17"
+              - option "18"
+              - option "19"
+              - option "20"
+              - option "21"
+              - option "22"
+              - option "23"
+              - option "24"
+              - option "25"
+              - option "26"
+              - option "27"
+              - option "28"
+              - option "29"
+              - option "30"
+              - option "31"
+            - combobox "Mese" [ref=f12e137]:
+              - option "Mese" [selected]
+              - option "gennaio"
+              - option "febbraio"
+              - option "marzo"
+              - option "aprile"
+              - option "maggio"
+              - option "giugno"
+              - option "luglio"
+              - option "agosto"
+              - option "settembre"
+              - option "ottobre"
+              - option "novembre"
+              - option "dicembre"
+            - combobox "Anno" [ref=f12e138]:
+              - option "Anno" [selected]
+              - option "2008"
+              - option "2007"
+              - option "2006"
+              - option "2005"
+              - option "2004"
+              - option "2003"
+              - option "2002"
+              - option "2001"
+              - option "2000"
+              - option "1999"
+              - option "1998"
+              - option "1997"
+              - option "1996"
+              - option "1995"
+              - option "1994"
+              - option "1993"
+              - option "1992"
+              - option "1991"
+              - option "1990"
+              - option "1989"
+              - option "1988"
+              - option "1987"
+              - option "1986"
+              - option "1985"
+              - option "1984"
+              - option "1983"
+              - option "1982"
+              - option "1981"
+              - option "1980"
+              - option "1979"
+              - option "1978"
+              - option "1977"
+              - option "1976"
+              - option "1975"
+              - option "1974"
+              - option "1973"
+              - option "1972"
+              - option "1971"
+              - option "1970"
+              - option "1969"
+              - option "1968"
+              - option "1967"
+              - option "1966"
+              - option "1965"
+              - option "1964"
+              - option "1963"
+              - option "1962"
+              - option "1961"
+              - option "1960"
+              - option "1959"
+              - option "1958"
+              - option "1957"
+              - option "1956"
+              - option "1955"
+              - option "1954"
+              - option "1953"
+              - option "1952"
+              - option "1951"
+              - option "1950"
+              - option "1949"
+              - option "1948"
+              - option "1947"
+              - option "1946"
+              - option "1945"
+              - option "1944"
+              - option "1943"
+              - option "1942"
+              - option "1941"
+              - option "1940"
+              - option "1939"
+              - option "1938"
+              - option "1937"
+              - option "1936"
+              - option "1935"
+              - option "1934"
+              - option "1933"
+              - option "1932"
+              - option "1931"
+              - option "1930"
+              - option "1929"
+              - option "1928"
+              - option "1927"
+              - option "1926"
+              - option "1925"
+              - option "1924"
+              - option "1923"
+              - option "1922"
+              - option "1921"
+              - option "1920"
+              - option "1919"
+              - option "1918"
+              - option "1917"
+              - option "1916"
+              - option "1915"
+              - option "1914"
+              - option "1913"
+              - option "1912"
+              - option "1911"
+              - option "1910"
+              - option "1909"
+        - generic [ref=f12e139]:
+          - generic [ref=f12e140]: Codice d'invito
+          - paragraph [ref=f12e141]: L'accesso è su invito durante la beta. Se ne hai ricevuto uno, incollalo qui.
+          - textbox "Codice d'invito" [ref=f12e142]:
+            - /placeholder: es. AMICI-2026
+        - button "Crea account" [ref=f12e143] [cursor=pointer]
+      - paragraph [ref=f12e144]:
+        - text: Continuando accetti i
+        - link "termini" [ref=f12e145] [cursor=pointer]:
+          - /url: /terms
+        - text: e l'
+        - link "informativa privacy" [ref=f12e146] [cursor=pointer]:
+          - /url: /privacy
+        - text: .
