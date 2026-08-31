@@ -9,6 +9,7 @@ const User = require('../models/User');
 const { sendMail } = require('../services/mailService');
 const { requireAuth, attachUser } = require('../middleware/auth');
 const { jwtSecret, isProduction, adminEmails, welcomeCredits, betaInviteCode, features } = require('../config/env');
+const { serverFailure, warnFailure } = require('../services/failure');
 
 const getJwtSecret = () => jwtSecret();
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -232,8 +233,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       user: formatUserResponse(newUser)
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Errore durante la registrazione' });
+    serverFailure(req, res, error, 'Errore durante la registrazione');
   }
 });
 
@@ -284,8 +284,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       user: formatUserResponse(user)
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Errore durante l\'accesso' });
+    serverFailure(req, res, error, 'Errore durante l\'accesso');
   }
 });
 
@@ -298,7 +297,10 @@ router.post('/logout', attachUser, async (req, res) => {
       await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
     }
   } catch (error) {
-    console.error('Logout revocation error:', error);
+    // La disconnessione prosegue comunque: il cookie viene cancellato. Ma la
+    // revoca mancata significa che i token già emessi restano validi fino alla
+    // scadenza, ed è esattamente il genere di cosa che deve lasciare traccia.
+    warnFailure(req, error, 'Revoca dei token non riuscita durante la disconnessione');
   }
 
   res.clearCookie('yc_token', SESSION_COOKIE_OPTIONS);
@@ -345,8 +347,7 @@ router.post('/forgot-password', resetLimiter, async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({ error: 'Impossibile avviare il recupero' });
+    serverFailure(req, res, error, 'Impossibile avviare il recupero');
   }
 });
 
@@ -387,8 +388,7 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
 
     res.json({ success: true, message: 'Password aggiornata. Ora puoi accedere.' });
   } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({ error: 'Impossibile reimpostare la password' });
+    serverFailure(req, res, error, 'Impossibile reimpostare la password');
   }
 });
 

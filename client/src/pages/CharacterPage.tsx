@@ -8,8 +8,11 @@ import { useCharacter } from '../hooks/useCharacters';
 import { useChats } from '../hooks/useChats';
 import { useStore, normalizeChat } from '../store/useStore';
 import Avatar from '../components/ui/Avatar';
+import Modal from '../components/ui/Modal';
 import { EmptyState, ErrorState, Spinner } from '../components/ui/States';
 import { formatCount, relativeTime } from '../lib/format';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { errorMessage } from '../lib/apiError';
 
 /**
  * Scheda del personaggio — la pagina che mancava.
@@ -26,6 +29,9 @@ export default function CharacterPage() {
   const { user, setAuthModalOpen, setReportModalOpen, notify, upsertChat } = useStore();
   const [starting, setStarting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Prima di ogni ritorno anticipato: gli hook non possono stare sotto un `if`.
+  useDocumentTitle(character?.name);
 
   if (status === 'loading') return <Spinner label="Caricamento del personaggio…" />;
 
@@ -81,7 +87,7 @@ export default function CharacterPage() {
       upsertChat(chat);
       navigate(`/chat/${chat._id}`);
     } catch (err: any) {
-      notify(err.response?.data?.error ?? 'Impossibile aprire la conversazione.', 'error');
+      notify(errorMessage(err, 'Impossibile aprire la conversazione.'), 'error');
       setStarting(false);
     }
   };
@@ -126,18 +132,18 @@ export default function CharacterPage() {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="font-display text-2xl font-bold text-ink">{character.name}</h1>
             {character.isNSFW && (
-              <span className="rounded-md bg-danger/15 px-2 py-0.5 text-[10px] font-bold text-danger">18+</span>
+              <span className="rounded-lg bg-danger/15 px-2 py-0.5 text-micro font-bold text-danger">18+</span>
             )}
             {!character.isPublic && (
-              <span className="rounded-md bg-surface px-2 py-0.5 text-[10px] font-medium text-ink-muted">Privato</span>
+              <span className="rounded-lg bg-surface px-2 py-0.5 text-micro font-medium text-ink-muted">Privato</span>
             )}
             {character.isPublic && character.moderationStatus === 'pending' && (
-              <span className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+              <span className="inline-flex items-center gap-1 rounded-lg border border-warning/40 bg-warning/10 px-2 py-0.5 text-micro font-medium text-warning">
                 <Clock3 className="h-3 w-3" aria-hidden="true" /> In revisione
               </span>
             )}
             {character.isPublic && character.moderationStatus === 'rejected' && (
-              <span className="rounded-md border border-danger/40 bg-danger/10 px-2 py-0.5 text-[10px] font-medium text-danger">
+              <span className="rounded-lg border border-danger/40 bg-danger/10 px-2 py-0.5 text-micro font-medium text-danger">
                 Respinto
               </span>
             )}
@@ -159,13 +165,13 @@ export default function CharacterPage() {
             </p>
           )}
 
-          <p className="mt-0.5 font-mono text-xs text-ink-dim">
+          <p className="mt-0.5 text-xs text-ink-dim">
             di @{creator?.username ?? 'community'}
           </p>
 
           <p className="mt-3 text-sm leading-relaxed text-ink-muted">{character.description}</p>
 
-          <div className="mt-4 flex items-center gap-4 font-mono text-xs text-ink-dim">
+          <div className="mt-4 flex items-center gap-4 text-xs text-ink-dim">
             <span className="flex items-center gap-1.5">
               <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
               {formatCount(character.chatCount ?? character.usageCount)} conversazioni
@@ -175,7 +181,7 @@ export default function CharacterPage() {
           {character.tags?.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {character.tags.map((tag) => (
-                <span key={tag} className="rounded-md bg-sapphire-wash px-2 py-0.5 text-[10px] font-medium text-sapphire-glow">
+                <span key={tag} className="rounded-lg bg-sapphire-wash px-2 py-0.5 text-micro font-medium text-sapphire-glow">
                   {tag}
                 </span>
               ))}
@@ -197,7 +203,7 @@ export default function CharacterPage() {
 
         <button
           onClick={() => setReportModalOpen(true, { type: 'character', id: character._id })}
-          className="btn-secondary flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm"
+          className="btn-ghost flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm"
         >
           <ShieldAlert className="h-4 w-4" aria-hidden="true" /> Segnala
         </button>
@@ -244,27 +250,38 @@ export default function CharacterPage() {
 
       {character.greetingMessage && (
         <section className="rounded-2xl border border-line bg-surface p-5">
-          <h2 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-ink-dim">Come ti accoglie</h2>
+          <h2 className="mb-2 eyebrow">Come ti accoglie</h2>
           <p className="text-sm italic leading-relaxed text-ink-muted">«{character.greetingMessage}»</p>
         </section>
       )}
 
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onClick={() => setConfirmDelete(false)}>
-          <div role="dialog" aria-modal="true" aria-label="Conferma eliminazione" onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl border border-line bg-bg-elevated p-5">
-            <h2 className="font-display text-base font-semibold text-ink">Eliminare {character.name}?</h2>
-            <p className="mt-2 text-sm text-ink-muted">
-              Verranno eliminate anche tutte le conversazioni collegate. L'operazione non è reversibile.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(false)} className="btn-secondary rounded-xl px-4 py-2 text-sm">Annulla</button>
-              <button onClick={remove} className="rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/85">
-                Elimina definitivamente
-              </button>
-            </div>
-          </div>
+      {/**
+        * Usa il modale condiviso, come tutte le altre finestre dell'app.
+        *
+        * Quello scritto qui a mano non si chiudeva con Esc, non intrappolava il
+        * focus e non lo restituiva a chi l'aveva aperto — e stava a `z-50`,
+        * cioè lo STESSO livello del banner dei cookie: a parità di livello
+        * vince chi viene dopo nel DOM, e il banner viene dopo. Chi apriva
+        * questa conferma prima di rispondere ai cookie si trovava il pulsante
+        * «Elimina definitivamente» perfettamente visibile e non cliccabile.
+        * È il difetto già corretto per il campo della chat e per gli altri
+        * modali, rimasto qui perché qui il modale condiviso non era usato.
+        */}
+      <Modal
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={`Eliminare ${character.name}?`}
+      >
+        <p className="text-sm text-ink-muted">
+          Verranno eliminate anche tutte le conversazioni collegate. L'operazione non è reversibile.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={() => setConfirmDelete(false)} className="btn-secondary rounded-xl px-4 py-2 text-sm">Annulla</button>
+          <button onClick={remove} className="rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/85">
+            Elimina definitivamente
+          </button>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

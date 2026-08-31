@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const logger = require('../services/logger');
 
 /**
  * Establishes the shared Mongoose connection used by every model.
@@ -9,10 +10,10 @@ async function connectDB() {
   const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/your-character';
 
   mongoose.connection.on('error', (err) => {
-    console.error('MongoDB connection error:', err.message);
+    logger.error({ err: { message: err.message } }, 'Errore di connessione a MongoDB');
   });
   mongoose.connection.on('disconnected', () => {
-    console.warn('⚠️  MongoDB disconnected');
+    logger.warn('MongoDB disconnesso');
   });
 
   await mongoose.connect(uri, {
@@ -26,12 +27,12 @@ async function connectDB() {
   // prima query che ne dipende fallirebbe altrimenti con un errore 500.
   try {
     await mongoose.syncIndexes();
-    console.log('✅ Indici del database sincronizzati');
+    logger.info('Indici del database sincronizzati');
   } catch (err) {
-    console.warn('⚠️  Sincronizzazione indici non riuscita:', err.message);
+    logger.warn({ err: { message: err.message } }, 'Sincronizzazione degli indici non riuscita');
   }
 
-  console.log('✅ MongoDB connected');
+  logger.info('Connessione a MongoDB stabilita');
 }
 
 module.exports = connectDB;

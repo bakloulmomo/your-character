@@ -5,6 +5,8 @@ import api from '../services/api';
 import { useStore } from '../store/useStore';
 import Avatar from '../components/ui/Avatar';
 import { Spinner } from '../components/ui/States';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { errorMessage } from '../lib/apiError';
 
 const CATEGORIES = [
   { value: 'assistant', label: 'Assistente' },
@@ -45,6 +47,8 @@ export default function CreateCharacterPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const editId = params.get('edit');
+
+  useDocumentTitle(editId ? 'Modifica personaggio' : 'Crea un personaggio');
   const { user, setAuthModalOpen, notify } = useStore();
 
   const [form, setForm] = useState(EMPTY);
@@ -133,7 +137,7 @@ export default function CreateCharacterPage() {
         setFieldErrors(mapped);
         setGeneralError('Controlla i campi segnalati.');
       } else {
-        setGeneralError(err.response?.data?.error ?? 'Impossibile salvare il personaggio.');
+        setGeneralError(errorMessage(err, 'Impossibile salvare il personaggio.'));
       }
     } finally {
       setSaving(false);
@@ -155,7 +159,7 @@ export default function CreateCharacterPage() {
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">
           <label htmlFor={key} className="text-sm font-medium text-ink">{label}</label>
-          <span className={`font-mono text-[10px] ${value.length > max ? 'text-danger' : 'text-ink-dim'}`}>
+          <span className={`text-micro ${value.length > max ? 'text-danger' : 'text-ink-dim'}`}>
             {value.length}/{max}
           </span>
         </div>
@@ -177,7 +181,7 @@ export default function CreateCharacterPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-8 md:px-8">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-8">
       <button onClick={() => navigate(-1)} className="btn-ghost mb-5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm">
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Indietro
       </button>

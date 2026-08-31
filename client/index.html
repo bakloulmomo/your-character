@@ -4,13 +4,34 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/jpeg" href="/favicon_logo.jpeg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>your-character</title>
-    <meta name="description" content="Piattaforma di IA conversazionale minimale, ad alte prestazioni ed elevata densità informativa." />
-    
-    <!-- Google Fonts: Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#05070E" />
+
+    <title>your-character — conversazioni con personaggi che crei tu</title>
+    <!-- La descrizione precedente («minimale, ad alte prestazioni ed elevata
+         densità informativa») non diceva che cosa fa il prodotto: erano
+         aggettivi sull'implementazione, non una frase per chi cerca. -->
+    <meta name="description" content="Crea un personaggio, dagli una personalità e conversaci. Le tue conversazioni restano tue." />
+
+    <!-- Anteprima dei link condivisi.
+         Il prodotto ha un pulsante «Condividi» su ogni scheda personaggio: senza
+         queste righe l'indirizzo incollato in una chat compariva come un URL
+         nudo, senza titolo né immagine. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="your-character" />
+    <meta property="og:title" content="your-character" />
+    <meta property="og:description" content="Crea un personaggio, dagli una personalità e conversaci." />
+    <meta property="og:image" content="/favicon_logo.jpeg" />
+    <meta name="twitter:card" content="summary" />
+
+    <!-- Due caratteri, non tre: JetBrains Mono veniva scaricato per decorare
+         etichette che non sono codice. `display=swap` e il precaricamento
+         evitano che il testo resti invisibile mentre arrivano. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body class="min-h-screen overflow-x-hidden">
     <div id="root"></div>

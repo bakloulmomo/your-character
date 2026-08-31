@@ -41,6 +41,45 @@ function sseResponse(events: unknown[]) {
   };
 }
 
+/**
+ * Risposta SSE che si ferma finché il test non la lascia proseguire.
+ *
+ * Serve a osservare l'attesa: con una risposta immediata la fase «richiesta
+ * partita, primo pezzo non ancora arrivato» dura meno di un fotogramma e non è
+ * verificabile.
+ */
+function pausedSseResponse() {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const encoder = new TextEncoder();
+  const chunks = [
+    encoder.encode(`data: ${JSON.stringify({ delta: 'Eccomi' })}\n\n`),
+    encoder.encode(`data: ${JSON.stringify({
+      done: true,
+      aiMessage: { _id: 'a3', chatId: CHAT_ID, role: 'assistant', content: 'Eccomi', createdAt: new Date().toISOString() },
+      user: { credits: 2, subscription: 'free' }
+    })}\n\n`)
+  ];
+  let i = 0;
+
+  return {
+    release,
+    response: {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/event-stream; charset=utf-8' }),
+      body: {
+        getReader: () => ({
+          read: async () => {
+            await gate;
+            return i < chunks.length ? { done: false, value: chunks[i++] } : { done: true, value: undefined };
+          }
+        })
+      }
+    }
+  };
+}
+
 /** Risposta JSON, come quella del percorso di crisi o di un errore. */
 function jsonResponse(status: number, payload: unknown) {
   return {
@@ -109,6 +148,33 @@ describe('ChatPage', () => {
     expect(await screen.findByText('Ciao a te!')).toBeInTheDocument();
     // Il saldo mostrato segue quello restituito dal server, non un calcolo locale.
     await waitFor(() => expect(useStore.getState().user?.credits).toBe(2));
+  });
+
+  it("durante l'attesa mostra l'indicatore di scrittura e NON una bolla vuota", async () => {
+    /**
+     * La bolla del testo in arrivo compariva già a contenuto vuoto, perché la
+     * condizione era «`streamingText` non è null» e all'avvio dello streaming
+     * quel valore è la stringa vuota. Sullo schermo restavano insieme una bolla
+     * vuota con il cursore lampeggiante E, sotto, i tre puntini: due modi
+     * contemporanei di dire la stessa cosa, uno dei quali senza contenuto.
+     */
+    const { release, response } = pausedSseResponse();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+
+    const { container } = renderChat();
+    await send('Ciao');
+
+    // Attesa in corso: c'è l'indicatore…
+    expect(await screen.findByRole('status', { name: /sta scrivendo/i })).toBeInTheDocument();
+    // …e l'unico orario a schermo è quello del messaggio appena inviato.
+    // Con la bolla vuota ce ne sarebbero due.
+    expect(container.querySelectorAll('time')).toHaveLength(1);
+
+    // Sbloccata la risposta, la bolla vuota lascia il posto al testo vero e
+    // l'indicatore sparisce.
+    release();
+    await waitFor(() => expect(screen.getByText('Eccomi')).toBeInTheDocument());
+    expect(screen.queryByRole('status', { name: /sta scrivendo/i })).not.toBeInTheDocument();
   });
 
   it('con i crediti esauriti E i pagamenti attivi apre la finestra di ricarica', async () => {
@@ -218,6 +284,38 @@ describe('ChatPage', () => {
     expect(await screen.findByText(/Non posso proseguire/)).toBeInTheDocument();
     // Il frammento vietato non resta a schermo.
     expect(screen.queryByText(/Ecco come si costruisce/)).not.toBeInTheDocument();
+  });
+
+  it('se il server ha già accettato il messaggio, un guasto NON lo rimette nel campo', async () => {
+    /**
+     * Il difetto: il ramo `error` dello streaming rimetteva sempre il testo nel
+     * campo di scrittura. Ma l'evento `userMessage` arriva PRIMA, e a quel
+     * punto il messaggio è già salvato sul server. Chi vedeva il proprio testo
+     * ricomparire nel campo concludeva ragionevolmente che non fosse partito e
+     * premeva invio di nuovo: la stessa domanda finiva due volte nella
+     * conversazione, e la seconda volta pagata.
+     */
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
+      {
+        userMessage: {
+          _id: 'u5', chatId: CHAT_ID, role: 'user',
+          content: 'Una domanda che non voglio ripetere', createdAt: new Date().toISOString()
+        }
+      },
+      { error: 'Il servizio AI non e momentaneamente disponibile.' }
+    ])));
+
+    renderChat();
+    await send('Una domanda che non voglio ripetere');
+
+    await waitFor(() => {
+      expect(useStore.getState().toasts.some((t) => t.message.includes('non e momentaneamente disponibile'))).toBe(true);
+    });
+
+    // Il campo resta vuoto…
+    expect(screen.getByPlaceholderText(/scrivi/i)).toHaveValue('');
+    // …e il messaggio resta a schermo, perché sul server c'è davvero.
+    expect(screen.getByText('Una domanda che non voglio ripetere')).toBeInTheDocument();
   });
 
   it('una connessione interrotta avvisa e restituisce il testo scritto', async () => {

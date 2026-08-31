@@ -11,6 +11,8 @@ const crypto = require('crypto');
 const { breakdown, isEuCountry, rateFor, RATES_REVIEWED_ON } = require('../services/vat');
 const { nextSequence } = require('../models/Counter');
 const { sellerDetails } = require('../config/env');
+const { serverFailure, warnFailure } = require('../services/failure');
+const logger = require('../services/logger');
 
 // Credit packages - minimum €2.99 to avoid Stripe fixed fee trap
 const CREDIT_PACKAGES = {
@@ -192,8 +194,7 @@ router.post('/checkout', requireFeature('payments'), requireAuth, checkoutLimite
       vat: { rate: vat.vatRate, country: vat.country, netCents: vat.netCents, vatCents: vat.vatCents }
     });
   } catch (error) {
-    console.error('Stripe Checkout Error:', error);
-    res.status(500).json({ error: 'Impossibile creare la sessione di pagamento' });
+    serverFailure(req, res, error, 'Impossibile creare la sessione di pagamento');
   }
 });
 
@@ -208,7 +209,7 @@ router.post('/webhook', async (req, res) => {
   // non firmato: senza questa regola chiunque poteva inviare un evento
   // "pagamento riuscito" con i crediti che voleva.
   if (!webhookSecret) {
-    console.error('[Webhook] STRIPE_WEBHOOK_SECRET non configurato: evento rifiutato.');
+    warnFailure(req, new Error('STRIPE_WEBHOOK_SECRET non configurato'), 'Webhook rifiutato: firma non verificabile');
     return res.status(400).json({ error: 'Webhook non configurato' });
   }
   if (!sig || !Buffer.isBuffer(req.body)) {
@@ -218,7 +219,7 @@ router.post('/webhook', async (req, res) => {
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
-    console.error('Stripe Webhook Signature Error:', err.message);
+    warnFailure(req, err, 'Webhook rifiutato: firma non valida');
     return res.status(400).json({ error: `Webhook Error: ${err.message}` });
   }
 
@@ -236,7 +237,7 @@ router.post('/webhook', async (req, res) => {
     // il saldo, oppure accreditare qualsiasi cifra).
     const amount = Number.parseInt(credits, 10);
     if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_GRANTABLE_CREDITS) {
-      console.error(`[Webhook] Crediti non plausibili (${credits}) per ${paymentIntent.id}: ignorato.`);
+      warnFailure(req, new Error(`Crediti non plausibili (${credits}) per ${paymentIntent.id}`), 'Webhook ignorato: crediti fuori scala');
       return res.status(200).json({ received: true, ignored: 'credits_non_validi' });
     }
 
@@ -256,13 +257,17 @@ router.post('/webhook', async (req, res) => {
       await User.findByIdAndUpdate(userId, { $inc: { credits: amount } });
       await assignInvoiceNumber(claimed);
 
-      console.log(`✅ Crediti accreditati: ${amount} a ${userId} (${paymentIntent.id})`);
+      // Accredito riuscito: va nel log strutturato, con il requestId, perché è
+      // la riga che si cerca quando qualcuno scrive «ho pagato e non vedo nulla».
+      (req.log || logger).info(
+        { credits: amount, userId, paymentIntentId: paymentIntent.id },
+        'Crediti accreditati dal webhook Stripe'
+      );
       return res.status(200).json({ received: true });
     } catch (err) {
       // 5xx, non 200: un errore interno deve far ritentare Stripe, altrimenti
       // il cliente ha pagato e i crediti non arrivano mai.
-      console.error('[Webhook] Errore su payment_intent.succeeded:', err);
-      return res.status(500).json({ error: 'Elaborazione fallita, ritentare' });
+      return serverFailure(req, res, err, 'Elaborazione fallita, ritentare');
     }
   }
 
@@ -416,8 +421,7 @@ router.post('/confirm', requireFeature('payments'), requireAuth, async (req, res
       invoiceNumber: receipted.invoiceNumber
     });
   } catch (error) {
-    console.error('Payment confirm error:', error);
-    return res.status(500).json({ error: 'Impossibile confermare il pagamento' });
+    return serverFailure(req, res, error, 'Impossibile confermare il pagamento');
   }
 });
 
@@ -489,8 +493,7 @@ router.post('/subscribe', requireFeature('subscriptions'), requireAuth, async (r
 
     return res.json({ url: checkoutSession.url });
   } catch (error) {
-    console.error('Subscribe error:', error);
-    return res.status(500).json({ error: 'Impossibile attivare l\'abbonamento' });
+    return serverFailure(req, res, error, 'Impossibile attivare l\'abbonamento');
   }
 });
 
@@ -545,8 +548,7 @@ router.post('/cancel-subscription', requireFeature('subscriptions'), requireAuth
       message: 'Abbonamento disdetto. Resta attivo fino alla fine del periodo già pagato.'
     });
   } catch (error) {
-    console.error('Cancel subscription error:', error);
-    return res.status(500).json({ error: 'Impossibile annullare l\'abbonamento' });
+    return serverFailure(req, res, error, 'Impossibile annullare l\'abbonamento');
   }
 });
 
@@ -567,8 +569,7 @@ router.get('/transactions', requireAuth, async (req, res) => {
 
     res.json({ transactions });
   } catch (error) {
-    console.error('List transactions error:', error);
-    res.status(500).json({ error: 'Impossibile recuperare lo storico dei pagamenti' });
+    serverFailure(req, res, error, 'Impossibile recuperare lo storico dei pagamenti');
   }
 });
 
@@ -634,8 +635,7 @@ router.get('/receipt/:transactionId', requireAuth, async (req, res) => {
       ratesReviewedOn: RATES_REVIEWED_ON
     });
   } catch (error) {
-    console.error('Receipt error:', error);
-    res.status(500).json({ error: 'Impossibile generare la ricevuta' });
+    serverFailure(req, res, error, 'Impossibile generare la ricevuta');
   }
 });
 

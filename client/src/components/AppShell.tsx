@@ -36,11 +36,34 @@ export default function AppShell() {
       className="min-h-screen bg-bg text-ink"
       style={{ ['--yc-banner' as string]: isCookieBannerOpen ? `${cookieBannerHeight}px` : '0px' }}
     >
+      {/**
+        * Salto diretto al contenuto.
+        *
+        * La barra laterale contiene, nell'ordine: logo, «Crea», campo di
+        * ricerca, voci di navigazione e POI l'intera cronologia delle
+        * conversazioni — una voce per chat, con un pulsante azioni ciascuna.
+        * Chi naviga da tastiera doveva attraversarli tutti per raggiungere la
+        * pagina, a ogni cambio di pagina: con venti conversazioni aperte sono
+        * oltre quaranta tabulazioni prima di poter leggere qualcosa.
+        *
+        * Invisibile finché non riceve il focus, che è esattamente il momento in
+        * cui serve.
+        */}
+      <a
+        href="#contenuto"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-xl focus:bg-sapphire focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+      >
+        Vai al contenuto
+      </a>
+
       <Sidebar />
 
-      <div className={`flex min-h-screen flex-col pb-[length:var(--yc-banner)] transition-all duration-200 ${isSidebarCollapsed ? 'md:pl-16' : 'md:pl-64'}`}>
+      <div className={`flex min-h-screen flex-col pb-[var(--yc-banner)] transition-all duration-200 ${isSidebarCollapsed ? 'md:pl-16' : 'md:pl-64'}`}>
         {/* Barra superiore solo su mobile, per aprire il menu */}
-        <header className="glass-panel sticky top-0 z-20 flex items-center gap-3 border-b px-4 py-3 md:hidden">
+        {/* `h-14` non e' decorativo: e' il valore di `--yc-topbar` in index.css,
+            che la chat sottrae dalla propria altezza. Fissarlo qui e' cio' che
+            rende quella sottrazione esatta invece che stimata. */}
+        <header className="glass-panel sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-4 md:hidden">
           <button
             onClick={() => setMobileSidebarOpen(true)}
             aria-label="Apri menu"
@@ -51,7 +74,10 @@ export default function AppShell() {
           <span className="font-display text-sm font-bold">your-character</span>
         </header>
 
-        <main className="flex-1">
+        {/* `tabIndex={-1}` rende il contenitore un bersaglio valido per il
+            salto: senza, il focus resterebbe sul link e la tabulazione
+            successiva ripartirebbe dalla barra laterale. */}
+        <main id="contenuto" tabIndex={-1} className="flex-1 outline-none">
           <Outlet />
         </main>
       </div>

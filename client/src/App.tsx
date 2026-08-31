@@ -60,7 +60,7 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  const { setUser, setAuthResolved, logout, setConfig } = useStore();
+  const { setUser, setAuthResolved, setToken, setConfig } = useStore();
 
   // Quali funzioni sono accese su questa istanza. Va chiesto PRIMA di disegnare
   // i comandi: l'alternativa e' mostrare pulsanti che spariscono un istante
@@ -95,9 +95,22 @@ export default function App() {
       .then((res) => {
         if (res.data?.user) setUser(res.data.user);
       })
-      .catch(() => logout())
+      .catch(() => {
+        /**
+         * Qui si ripulisce SOLO lo stato locale.
+         *
+         * Prima questo ramo chiamava `logout()`, che parla anche col server.
+         * Due conseguenze, entrambe sbagliate: ogni visitatore anonimo faceva
+         * partire una POST /auth/logout inutile a ogni caricamento, e — molto
+         * peggio — un errore di rete passeggero su /auth/me faceva cancellare
+         * al server il cookie di sessione. Bastava un istante di connessione
+         * incerta all'avvio per ritrovarsi disconnessi davvero.
+         */
+        setUser(null);
+        setToken(null);
+      })
       .finally(() => setAuthResolved(true));
-  }, [setUser, setAuthResolved, logout]);
+  }, [setUser, setToken, setAuthResolved]);
 
   return <RouterProvider router={router} />;
 }

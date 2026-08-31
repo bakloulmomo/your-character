@@ -5,8 +5,10 @@ import { useStore } from '../store/useStore';
 import CharacterCard from '../components/CharacterCard';
 import Avatar from '../components/ui/Avatar';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 export default function ProfilePage() {
+  useDocumentTitle('Il tuo profilo');
   const { user, setAuthModalOpen, setBuyCreditsModalOpen, features } = useStore();
   const { characters, status, reload } = useMyCharacters(!!user);
 
@@ -45,11 +47,16 @@ export default function ProfilePage() {
       {/* Riepilogo del piano */}
       <div className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-line bg-surface p-4">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">Crediti</p>
+          <p className="eyebrow">Crediti</p>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{user.credits}</p>
+          {/* Un bersaglio da 60x16 px non si centra con un dito. Il testo resta
+              lo stesso, l'area attivabile diventa toccabile. */}
           {features.payments ? (
-            <button onClick={() => setBuyCreditsModalOpen(true)} className="mt-2 flex items-center gap-1 text-xs text-sapphire-glow hover:underline">
-              <Coins className="h-3 w-3" aria-hidden="true" /> Ricarica
+            <button
+              onClick={() => setBuyCreditsModalOpen(true)}
+              className="-ml-2 mt-1 flex min-h-[36px] items-center gap-1.5 rounded-lg px-2 text-xs text-sapphire-glow transition-colors hover:bg-sapphire-wash"
+            >
+              <Coins className="h-3.5 w-3.5" aria-hidden="true" /> Ricarica
             </button>
           ) : (
             <p className="mt-2 text-xs text-ink-dim">Crediti della beta</p>
@@ -57,7 +64,7 @@ export default function ProfilePage() {
         </div>
 
         <div className="rounded-2xl border border-line bg-surface p-4">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">Piano</p>
+          <p className="eyebrow">Piano</p>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{planLabel}</p>
           {user.subscription !== 'free' && user.subscriptionExpiresAt && (
             <p className="mt-2 text-xs text-ink-dim">
@@ -67,7 +74,7 @@ export default function ProfilePage() {
         </div>
 
         <div className="rounded-2xl border border-line bg-surface p-4">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">Uso di oggi</p>
+          <p className="eyebrow">Uso di oggi</p>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{user.dailyMessageCount}</p>
           <p className="mt-2 text-xs text-ink-dim">messaggi inviati</p>
         </div>

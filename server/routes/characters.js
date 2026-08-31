@@ -11,6 +11,7 @@ const { moderateCharacterProfile } = require('../services/moderationService');
 const { recordViolation } = require('../services/moderationLog');
 
 const mongoose = require('mongoose');
+const { serverFailure } = require('../services/failure');
 
 /**
  * Vista pubblica di un personaggio.
@@ -118,8 +119,7 @@ router.get('/', attachUser, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('List characters error:', error);
-    res.status(500).json({ error: 'Impossibile recuperare i personaggi' });
+    serverFailure(req, res, error, 'Impossibile recuperare i personaggi');
   }
 });
 
@@ -133,8 +133,7 @@ router.get('/my-characters', requireAuth, async (req, res) => {
 
     res.json(characters);
   } catch (error) {
-    console.error('Get my characters error:', error);
-    res.status(500).json({ error: 'Impossibile recuperare i tuoi character' });
+    serverFailure(req, res, error, 'Impossibile recuperare i tuoi character');
   }
 });
 
@@ -168,8 +167,7 @@ router.get('/:id', attachUser, async (req, res) => {
 
     res.json(character);
   } catch (error) {
-    console.error('Get character details error:', error);
-    res.status(500).json({ error: 'Impossibile recuperare il personaggio' });
+    serverFailure(req, res, error, 'Impossibile recuperare il personaggio');
   }
 });
 
@@ -234,8 +232,7 @@ router.post('/', requireAuth, createCharacterLimiter, validate(createCharacterSc
     const { systemPrompt, ...safe } = character.toObject();
     res.status(201).json(safe);
   } catch (error) {
-    console.error('Create character error:', error);
-    res.status(500).json({ error: 'Impossibile creare il character' });
+    serverFailure(req, res, error, 'Impossibile creare il character');
   }
 });
 
@@ -274,8 +271,7 @@ router.put('/:id', requireAuth, validate(createCharacterSchema), async (req, res
     const { systemPrompt, ...safe } = character.toObject();
     res.json(safe);
   } catch (error) {
-    console.error('Update character error:', error);
-    res.status(500).json({ error: 'Impossibile aggiornare il character' });
+    serverFailure(req, res, error, 'Impossibile aggiornare il character');
   }
 });
 
@@ -309,8 +305,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
       deletedChats: orphanChatIds.length
     });
   } catch (error) {
-    console.error('Delete character error:', error);
-    res.status(500).json({ error: 'Impossibile eliminare il character' });
+    serverFailure(req, res, error, 'Impossibile eliminare il character');
   }
 });
 

@@ -8,6 +8,7 @@ const Character = require('../models/Character');
 const Transaction = require('../models/Transaction');
 const Report = require('../models/Report');
 const User = require('../models/User');
+const { serverFailure } = require('../services/failure');
 
 const SYSTEM_ACCOUNT_EMAIL = 'system@your-character.app';
 
@@ -102,8 +103,7 @@ router.patch('/me/preferences', requireAuth, async (req, res) => {
       billingCountry: user.billingCountry
     });
   } catch (error) {
-    console.error('Update preferences error:', error);
-    res.status(500).json({ error: 'Impossibile aggiornare le preferenze' });
+    serverFailure(req, res, error, 'Impossibile aggiornare le preferenze');
   }
 });
 
@@ -165,8 +165,7 @@ router.get('/me/export', requireAuth, exportLimiter, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="your-character-gdpr-export-${userId}.json"`);
     res.json(exportData);
   } catch (error) {
-    console.error('GDPR Export Error:', error);
-    res.status(500).json({ error: 'Errore durante l\'esportazione dei dati GDPR' });
+    serverFailure(req, res, error, 'Errore durante l\'esportazione dei dati GDPR');
   }
 });
 
@@ -176,8 +175,33 @@ router.delete('/me', requireAuth, async (req, res) => {
     const userId = req.user._id;
 
     // Retrieve user chats to clean associated messages and sessions
-    const userChats = await Chat.find({ userId }).select('_id');
+    const userChats = await Chat.find({ userId }).select('_id characterId').lean();
     const chatIds = userChats.map(c => c._id);
+
+    /**
+     * Le conversazioni che spariscono smettono di essere contate.
+     *
+     * `chatCount` è il numero mostrato in galleria come «N conversazioni». Ogni
+     * chat aperta lo incrementa e nessun percorso lo decrementava: cancellando
+     * un account con cinquanta conversazioni, cinquanta conversazioni
+     * inesistenti restavano contate — e sui personaggi PUBBLICI, cioè quelli di
+     * altre persone, che qui vengono deliberatamente conservati. Il contatore
+     * poteva quindi solo allontanarsi dalla realtà.
+     */
+    const perCharacter = new Map();
+    for (const chat of userChats) {
+      if (!chat.characterId) continue;
+      const key = chat.characterId.toString();
+      perCharacter.set(key, (perCharacter.get(key) || 0) + 1);
+    }
+    await Promise.all(
+      [...perCharacter].map(([characterId, count]) =>
+        Character.updateOne(
+          { _id: characterId, chatCount: { $gte: count } },
+          { $inc: { chatCount: -count } }
+        )
+      )
+    );
 
     // I personaggi PUBBLICI restano disponibili alla community, ma non possono
     // puntare a un autore inesistente: vengono riassegnati a un account di
@@ -225,8 +249,7 @@ router.delete('/me', requireAuth, async (req, res) => {
       message: 'Account e dati personali eliminati con successo in conformità alle norme GDPR.'
     });
   } catch (error) {
-    console.error('GDPR Account Deletion Error:', error);
-    res.status(500).json({ error: 'Errore durante l\'eliminazione dell\'account' });
+    serverFailure(req, res, error, 'Errore durante l\'eliminazione dell\'account');
   }
 });
 

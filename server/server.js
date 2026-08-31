@@ -159,6 +159,24 @@ app.get('/health', (req, res) => {
   });
 });
 
+/**
+ * Rotta API inesistente.
+ *
+ * Senza questo blocco rispondeva Express con la sua pagina HTML di default
+ * («Cannot GET /api/...», `content-type: text/html`). Un client che chiama una
+ * API JSON e riceve una pagina HTML non ha modo di leggere l'errore: `data` è
+ * una stringa di markup, `data.error` è `undefined`, e l'utente vede il
+ * messaggio generico di ripiego qualunque cosa sia successo. Vale anche per un
+ * refuso in un indirizzo dopo un deploy parziale, che è il momento in cui
+ * sapere quale rotta manca conta di più.
+ */
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    error: `Rotta non trovata: ${req.method} ${req.baseUrl}${req.path}`,
+    requestId: req.id
+  });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   const status = err.status || 500;
@@ -172,15 +190,28 @@ app.use((err, req, res, next) => {
     reportError(err, { requestId: req.id, route: req.originalUrl, userId: req.user && req.user._id });
   }
 
+  /**
+   * `error` è una STRINGA, come nelle altre 174 risposte di errore della API.
+   *
+   * Qui era un oggetto `{ message, status, requestId }`, e nessun test copriva
+   * questo gestore. Il client legge `data.error` in sedici punti e lo passa
+   * direttamente a `notify()` o dentro il JSX: ricevendo un oggetto, React
+   * solleva «Objects are not valid as a React child» e l'intera pagina viene
+   * sostituita dalla schermata dell'ErrorBoundary. Cioè: qualunque eccezione
+   * non gestita sul server non produceva un avviso, produceva il crollo
+   * dell'interfaccia — l'errore peggiore possibile in risposta a un errore.
+   *
+   * Il `requestId` resta, come campo affiancato: serve a collegare la
+   * segnalazione dell'utente alla riga di log, e non deve costare la
+   * leggibilità del messaggio.
+   */
   res.status(status).json({
-    error: {
-      // Il messaggio interno di un 500 può contenere dettagli di
-      // implementazione: all'utente arriva una formulazione neutra, la
-      // diagnosi resta nel log insieme al requestId.
-      message: status >= 500 ? 'Errore interno del server' : err.message || 'Richiesta non valida',
-      status,
-      requestId: req.id
-    }
+    // Il messaggio interno di un 500 può contenere dettagli di
+    // implementazione: all'utente arriva una formulazione neutra, la
+    // diagnosi resta nel log insieme al requestId.
+    error: status >= 500 ? 'Errore interno del server' : err.message || 'Richiesta non valida',
+    status,
+    requestId: req.id
   });
 });
 

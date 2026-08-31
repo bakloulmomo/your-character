@@ -15,7 +15,13 @@ const SRC = 'src';
 const DIST = 'dist/assets';
 
 /** Prefissi delle classi personalizzate del progetto (non utilità Tailwind). */
-const CUSTOM_PREFIXES = ['glass-', 'btn-', 'card-', 'input-', 'animate-', 'scrollbar-'];
+const CUSTOM_PREFIXES = [
+  'glass-', 'btn-', 'card-', 'input-', 'animate-', 'scrollbar-',
+  // Aggiunte con la revisione del design system: se una di queste sparisce
+  // dal CSS mentre resta nel codice, il controllo deve accorgersene come per
+  // le altre.
+  'eyebrow', 'field-shell', 'hover-action'
+];
 
 const walk = (dir) =>
   readdirSync(dir).flatMap((entry) => {

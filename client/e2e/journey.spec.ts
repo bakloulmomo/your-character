@@ -86,7 +86,13 @@ test('percorso completo: dalla registrazione all\'eliminazione dell\'account', a
   // ── 7. Esaurimento dei crediti ─────────────────────────────────────────────
   // Il limite deve arrivare dal server e fermare l'invio: prima una guardia
   // fallita serviva comunque la risposta, gratis (S1-2).
-  const buyDialog = page.getByRole('button', { name: 'Conferma Acquisto' });
+  /**
+   * Il pulsante si chiamava «Conferma Acquisto» — maiuscole a caso in mezzo a
+   * un'interfaccia che scrive «Invia segnalazione» e «Salva modifiche» — e non
+   * diceva quanto si stava per spendere. Ora porta l'importo: l'azione e il suo
+   * prezzo nello stesso posto.
+   */
+  const buyDialog = page.getByRole('button', { name: /^Acquista / });
   for (let i = 0; i < 12 && !(await buyDialog.isVisible()); i++) {
     await sendMessage(page, `Messaggio numero ${i}`);
     await page.waitForTimeout(250);

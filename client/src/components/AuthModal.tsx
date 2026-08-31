@@ -3,6 +3,7 @@ import { Eye, EyeOff, CheckCircle2, Circle, Loader2, ArrowLeft, MailCheck } from
 import api from '../services/api';
 import { useStore } from '../store/useStore';
 import Modal from './ui/Modal';
+import { errorMessage } from '../lib/apiError';
 
 type View = 'login' | 'register' | 'forgot' | 'sent';
 
@@ -60,7 +61,7 @@ export default function AuthModal() {
       notify(`Bentornato, @${res.data.user.username}.`, 'success');
       close();
     } catch (err: any) {
-      setError(err.response?.data?.error ?? 'Accesso non riuscito.');
+      setError(errorMessage(err, 'Accesso non riuscito.'));
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,7 @@ export default function AuthModal() {
       notify('Account creato. Hai 10 crediti per cominciare.', 'success');
       close();
     } catch (err: any) {
-      setError(err.response?.data?.error ?? 'Registrazione non riuscita.');
+      setError(errorMessage(err, 'Registrazione non riuscita.'));
     } finally {
       setLoading(false);
     }
@@ -121,7 +122,7 @@ export default function AuthModal() {
       await api.post('/auth/forgot-password', { email });
       setView('sent');
     } catch (err: any) {
-      setError(err.response?.data?.error ?? 'Richiesta non riuscita.');
+      setError(errorMessage(err, 'Richiesta non riuscita.'));
     } finally {
       setLoading(false);
     }

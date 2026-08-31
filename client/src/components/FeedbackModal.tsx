@@ -3,6 +3,7 @@ import { Star, Send, Check, MessageSquareHeart } from 'lucide-react';
 import api from '../services/api';
 import { useStore } from '../store/useStore';
 import Modal from './ui/Modal';
+import { errorMessage } from '../lib/apiError';
 
 /**
  * Canale con cui gli utenti della beta dicono che cosa pensano.
@@ -46,7 +47,7 @@ export default function FeedbackModal() {
       setDone(true);
       setTimeout(close, 2200);
     } catch (err: any) {
-      notify(err.response?.data?.error ?? 'Non siamo riusciti a inviare. Riprova.', 'error');
+      notify(errorMessage(err, 'Non siamo riusciti a inviare. Riprova.'), 'error');
     } finally {
       setLoading(false);
     }
@@ -124,7 +125,7 @@ export default function FeedbackModal() {
               }
               className="input-field resize-y"
             />
-            <p className="mt-1 text-right font-mono text-[10px] text-ink-dim">{message.length}/2000</p>
+            <p className="mt-1 text-right text-micro text-ink-dim">{message.length}/2000</p>
           </div>
 
           <div className="flex items-center justify-end gap-2 border-t border-line pt-4">

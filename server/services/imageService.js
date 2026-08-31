@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { imageMode } = require('../config/env');
 const { storeImage } = require('./storageService');
+const logger = require('./logger');
 
 const STABILITY_URL = 'https://api.stability.ai/v2beta/stable-image/generate/sd3';
 const STABILITY_TIMEOUT_MS = 60000;
@@ -61,7 +62,7 @@ async function generateImage(prompt, aspectRatio = '1:1') {
       placeholder: false
     };
   } catch (error) {
-    console.error('Stability AI Service Error:', error.response?.data || error.message);
+    logger.error({ err: { message: error.message } }, 'Generazione immagine non riuscita');
     throw new Error('Impossibile generare l\'immagine al momento. Riprova più tardi.');
   }
 }

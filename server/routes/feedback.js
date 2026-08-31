@@ -8,6 +8,7 @@ const { sendMail } = require('../services/mailService');
 const Feedback = require('../models/Feedback');
 const Message = require('../models/Message');
 const Chat = require('../models/Chat');
+const { serverFailure } = require('../services/failure');
 
 const feedbackLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -98,8 +99,7 @@ router.post('/', requireAuth, feedbackLimiter, async (req, res) => {
         : 'Grazie. Leggiamo tutto quello che arriva.'
     });
   } catch (error) {
-    console.error('Feedback error:', error);
-    res.status(500).json({ error: 'Impossibile inviare il feedback' });
+    serverFailure(req, res, error, 'Impossibile inviare il feedback');
   }
 });
 
@@ -137,8 +137,7 @@ router.get('/', requireRole('moderator', 'admin'), async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Feedback list error:', error);
-    res.status(500).json({ error: 'Impossibile recuperare i feedback' });
+    serverFailure(req, res, error, 'Impossibile recuperare i feedback');
   }
 });
 

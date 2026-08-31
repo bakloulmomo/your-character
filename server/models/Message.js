@@ -29,7 +29,7 @@ const messageSchema = new mongoose.Schema({
   image: {
     url: String,
     prompt: String,
-    generationId: String
+    generationId: String,
   },
   cost: {
     type: Number,

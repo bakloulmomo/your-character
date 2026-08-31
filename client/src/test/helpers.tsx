@@ -61,6 +61,7 @@ export function resetStore(partial: Record<string, unknown> = {}) {
     reportTarget: null,
     chats: [],
     chatsStatus: 'ready',
+    chatsLoadedFor: null,
     toasts: [],
     // Stato di partenza dell'istanza: tutto spento, come prima che il server
     // risponda a /api/config.

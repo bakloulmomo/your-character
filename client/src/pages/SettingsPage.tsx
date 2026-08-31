@@ -8,6 +8,8 @@ import { useStore } from '../store/useStore';
 import { EmptyState } from '../components/ui/States';
 import Modal from '../components/ui/Modal';
 import { CONSENT_VERSION, getConsent, setConsent } from '../lib/consent';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { errorMessage } from '../lib/apiError';
 
 interface TransactionRow {
   _id: string;
@@ -55,6 +57,7 @@ function Card({ title, icon: Icon, description, children, tone = 'normal' }: {
 }
 
 export default function SettingsPage() {
+  useDocumentTitle('Impostazioni');
   const navigate = useNavigate();
   const { user, setAuthModalOpen, notify, logout, patchUser, features } = useStore();
 
@@ -99,7 +102,7 @@ export default function SettingsPage() {
       onOk();
       notify('Preferenza aggiornata.', 'success');
     } catch (err: any) {
-      notify(err.response?.data?.error ?? 'Aggiornamento non riuscito.', 'error');
+      notify(errorMessage(err, 'Aggiornamento non riuscito.'), 'error');
     } finally {
       setSavingPref(null);
     }
@@ -163,12 +166,12 @@ export default function SettingsPage() {
       link.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      notify(err.response?.data?.error ?? 'Ricevuta non disponibile.', 'error');
+      notify(errorMessage(err, 'Ricevuta non disponibile.'), 'error');
     }
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-8 md:px-8">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-8">
       <h1 className="mb-8 font-display text-2xl font-bold text-ink">Impostazioni</h1>
 
       {/* --- Cookie (S2-6) ---------------------------------------------------- */}
@@ -205,7 +208,7 @@ export default function SettingsPage() {
         </div>
         )}
         {user.cookieConsent?.updatedAt && (
-          <p className="mt-3 font-mono text-xs text-ink-dim">
+          <p className="mt-3 text-xs text-ink-dim">
             Scelta registrata il {new Date(user.cookieConsent.updatedAt).toLocaleString('it-IT')}
           </p>
         )}
@@ -315,11 +318,11 @@ export default function SettingsPage() {
                 <div className="min-w-0">
                   <p className="truncate text-sm text-ink">
                     {t.type === 'subscription' ? 'Abbonamento' : `${t.credits} crediti`}
-                    <span className="ml-2 font-mono text-xs text-ink-dim">
+                    <span className="ml-2 text-xs text-ink-dim">
                       {new Date(t.createdAt).toLocaleDateString('it-IT')}
                     </span>
                   </p>
-                  <p className="font-mono text-xs text-ink-dim">
+                  <p className="text-xs text-ink-dim">
                     {euro(t.grossCents, t.currency)}
                     {t.vatRate > 0 && ` · IVA ${t.vatRate}% (${euro(t.vatCents, t.currency)}) · ${t.country}`}
                     {t.invoiceNumber && ` · ${t.invoiceNumber}`}
@@ -330,7 +333,7 @@ export default function SettingsPage() {
                     Ricevuta
                   </button>
                 ) : (
-                  <span className="font-mono text-xs text-ink-dim">{t.status}</span>
+                  <span className="text-xs text-ink-dim">{t.status}</span>
                 )}
               </li>
             ))}

@@ -15,6 +15,7 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const { reserveAllowance, IMAGE_CREDIT_COST } = require('../models/User');
 const Transaction = require('../models/Transaction');
+const { serverFailure, warnFailure } = require('../services/failure');
 
 // POST /api/images/generate - Generate image in chat (Deducts 10 credits)
 // La generazione di immagini costa $0.025 a chiamata contro $0.0015 di un
@@ -57,9 +58,23 @@ router.post('/generate', requireFeature('imageGeneration'), requireAuth, imageLi
     //    operazione atomica, così le richieste simultanee non possono
     //    superare né il saldo né il limite giornaliero.
     reservation = await reserveAllowance(userId, req.user.subscription, 'image');
-    if (!reservation) {
-      return res.status(402).json({
-        error: `Crediti insufficienti per generare un'immagine (richiesti ${IMAGE_CREDIT_COST} crediti) o limite giornaliero raggiunto.`
+    /**
+     * `blockedBy` va controllato anche qui.
+     *
+     * Oggi `reserveAllowance` non lo restituisce mai per le immagini — il tetto
+     * giornaliero della beta è impostato a zero per questo tipo — quindi il solo
+     * `!reservation` bastava. Ma è vero per coincidenza, non per costruzione: il
+     * giorno in cui si introduce un tetto sulle immagini, questo ramo lascerebbe
+     * passare la generazione e poi chiamerebbe `refund()` su una riserva mai
+     * concessa. La rotta dei messaggi lo controlla già; qui era rimasto fuori.
+     */
+    if (!reservation || reservation.blockedBy) {
+      const cap = reservation && reservation.cap;
+      reservation = null;
+      return res.status(cap ? 429 : 402).json({
+        error: cap
+          ? `Hai raggiunto il limite di ${cap} immagini al giorno. Il conteggio riparte a mezzanotte.`
+          : `Crediti insufficienti per generare un'immagine (richiesti ${IMAGE_CREDIT_COST} crediti) o limite giornaliero raggiunto.`
       });
     }
 
@@ -125,11 +140,10 @@ router.post('/generate', requireFeature('imageGeneration'), requireAuth, imageLi
       }
     });
   } catch (error) {
-    console.error('Generate image route error:', error);
     if (reservation) {
-      try { await reservation.refund(); } catch (e) { console.error('Refund failed:', e.message); }
+      try { await reservation.refund(); } catch (e) { warnFailure(req, e, 'Rimborso dei crediti non riuscito'); }
     }
-    res.status(500).json({ error: 'Impossibile generare l\'immagine' });
+    serverFailure(req, res, error, 'Impossibile generare l\'immagine');
   }
 });
 

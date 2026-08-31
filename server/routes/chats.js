@@ -6,6 +6,7 @@ const { createChatSchema } = require('../utils/validation');
 const Chat = require('../models/Chat');
 const Character = require('../models/Character');
 const Message = require('../models/Message');
+const { serverFailure } = require('../services/failure');
 
 // POST /api/chats - Start a new chat session with a character
 router.post('/', requireAuth, validate(createChatSchema), async (req, res) => {
@@ -70,8 +71,7 @@ router.post('/', requireAuth, validate(createChatSchema), async (req, res) => {
 
     res.status(201).json(chat);
   } catch (error) {
-    console.error('Create chat error:', error);
-    res.status(500).json({ error: 'Impossibile creare la chat' });
+    serverFailure(req, res, error, 'Impossibile creare la chat');
   }
 });
 
@@ -80,13 +80,17 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const chats = await Chat.find({ userId: req.user._id })
       .populate('characterId', 'name avatar description isNSFW category')
-      .sort({ updatedAt: -1 })
+      // Per ATTIVITA', non per data di creazione. `updatedAt` non si muoveva
+      // mai (vedi il hook sul modello), quindi questa lista era ordinata per
+      // quando le conversazioni erano state APERTE — l'esatto contrario di
+      // quello che una cronologia deve fare, e in contraddizione con gli orari
+      // relativi che l'interfaccia mostra accanto a ogni riga.
+      .sort({ lastMessageAt: -1 })
       .lean();
 
     res.json(chats);
   } catch (error) {
-    console.error('Get chats error:', error);
-    res.status(500).json({ error: 'Impossibile recuperare lo storico delle chat' });
+    serverFailure(req, res, error, 'Impossibile recuperare lo storico delle chat');
   }
 });
 
@@ -103,8 +107,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
     res.json(chat);
   } catch (error) {
-    console.error('Get chat error:', error);
-    res.status(500).json({ error: 'Errore nel recupero della chat' });
+    serverFailure(req, res, error, 'Errore nel recupero della chat');
   }
 });
 
@@ -121,13 +124,27 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
     await Promise.all([
       Chat.findByIdAndDelete(chatId),
-      Message.deleteMany({ chatId })
+      Message.deleteMany({ chatId }),
+      /**
+       * Il contatore del personaggio scende quando la conversazione sparisce.
+       *
+       * L'apertura lo incrementava e nessun percorso lo decrementava mai:
+       * `chatCount` poteva solo crescere. È il numero mostrato sulla card e
+       * sulla scheda come «N conversazioni», quindi si allontanava dalla realtà
+       * a ogni eliminazione e non tornava più indietro.
+       *
+       * `$max` a 0 non esiste in MongoDB: si decrementa solo se c'è qualcosa da
+       * decrementare, così un contatore già a zero non diventa negativo.
+       */
+      Character.updateOne(
+        { _id: chat.characterId, chatCount: { $gt: 0 } },
+        { $inc: { chatCount: -1 } }
+      )
     ]);
 
     res.json({ success: true, message: 'Chat eliminata con successo' });
   } catch (error) {
-    console.error('Delete chat error:', error);
-    res.status(500).json({ error: 'Impossibile eliminare la chat' });
+    serverFailure(req, res, error, 'Impossibile eliminare la chat');
   }
 });
 

@@ -11,6 +11,7 @@
  * avrebbe potuto esaminare.
  */
 const Report = require('../models/Report');
+const logger = require('./logger');
 
 const EVIDENCE_MAX = 480;
 
@@ -68,7 +69,7 @@ async function recordViolation({ verdict, reporter, targetType, targetId, target
   } catch (error) {
     // Una segnalazione non registrata è un problema di osservabilità, non un
     // motivo per rifiutare una richiesta che è già stata decisa.
-    console.error('[moderazione] registrazione della violazione fallita:', error.message);
+    logger.error({ err: { message: error.message } }, 'Registrazione della violazione di moderazione fallita');
     return null;
   }
 }

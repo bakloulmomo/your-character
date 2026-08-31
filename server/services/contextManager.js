@@ -1,6 +1,7 @@
 const Message = require('../models/Message');
 const Chat = require('../models/Chat');
 const { generateSummary } = require('./geminiService');
+const logger = require('./logger');
 
 // Quanti turni recenti entrano nel contesto inviato al modello.
 const CONTEXT_MESSAGES = 30;
@@ -133,7 +134,7 @@ async function maybeSummarize(chatId) {
   } catch (error) {
     // Una sintesi mancata degrada la memoria a lungo termine ma non deve mai
     // far fallire l'invio di un messaggio.
-    console.error('Summarization error:', error.message);
+    logger.warn({ err: { message: error.message } }, 'Sintesi del contesto non riuscita: la memoria lunga resta parziale');
   }
 }
 

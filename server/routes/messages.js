@@ -16,6 +16,7 @@ const { betaDailyMessageCap } = require('../config/env');
 const { applyDailyReset, applySubscriptionExpiry } = require('../utils/time');
 const { messageLimiter } = require('../middleware/rateLimit');
 const { recordCall } = require('../services/metrics');
+const { serverFailure, warnFailure, logFailure } = require('../services/failure');
 
 /**
  * Rifiuto della riserva, spiegato.
@@ -214,12 +215,11 @@ router.post('/', requireAuth, messageLimiter, validate(sendMessageSchema), async
       }
     });
   } catch (error) {
-    console.error('Send message error:', error);
     // Qualsiasi errore imprevisto dopo la riserva deve restituirla.
     if (reservation) {
-      try { await reservation.refund(); } catch (e) { console.error('Refund failed:', e.message); }
+      try { await reservation.refund(); } catch (e) { warnFailure(req, e, 'Rimborso dei crediti non riuscito'); }
     }
-    res.status(500).json({ error: 'Impossibile inviare il messaggio' });
+    serverFailure(req, res, error, 'Impossibile inviare il messaggio');
   }
 });
 
@@ -242,7 +242,7 @@ router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema),
 
   const fail = async (status, message) => {
     if (reservation) {
-      try { await reservation.refund(); } catch (e) { console.error('Refund failed:', e.message); }
+      try { await reservation.refund(); } catch (e) { warnFailure(req, e, 'Rimborso dei crediti non riuscito'); }
       reservation = null;
     }
     if (headersSent) {
@@ -324,6 +324,24 @@ router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema),
       recordCall('llm', { ok: false });
       const failure = llmFailure(llmErr);
       req.log.error({ err: llmErr.message, chatId, reason: failure.reason }, 'Streaming del modello fallito');
+
+      /**
+       * Il messaggio dell'utente è già stato salvato: la conversazione deve
+       * saperlo.
+       *
+       * La rotta non-streaming faceva questo aggiornamento nel proprio ramo di
+       * guasto; qui mancava. E siccome il client invia SEMPRE da questa rotta,
+       * era l'unico percorso che gli utenti attraversano davvero: a ogni
+       * guasto del modello il messaggio finiva in archivio mentre
+       * `messageCount` restava indietro di uno e `lastMessageAt` non si
+       * spostava. Conseguenze visibili: il conteggio sulla scheda del
+       * personaggio scendeva sotto il numero reale di messaggi, e la
+       * conversazione non risaliva in cima alla cronologia — restava
+       * raggruppata sotto «Ieri» o «Ultimi 7 giorni» pur avendo appena
+       * ricevuto un messaggio.
+       */
+      await Chat.findByIdAndUpdate(chatId, { $inc: { messageCount: 1 }, lastMessageAt: new Date() });
+
       return fail(failure.status, failure.error);
     }
 
@@ -369,7 +387,14 @@ router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema),
     });
     res.end();
   } catch (error) {
-    console.error('Stream message error:', error);
+    /**
+     * Su questa rotta le intestazioni possono essere già partite: `fail()` sa
+     * scegliere fra un corpo JSON e un evento SSE, quindi resta lui a
+     * rispondere. Ciò che mancava era la REGISTRAZIONE — un guasto in mezzo a
+     * uno streaming è il più difficile da diagnosticare e non lasciava traccia
+     * correlata né raggiungeva la raccolta errori.
+     */
+    logFailure(req, error, 'Impossibile inviare il messaggio (streaming)');
     return fail(500, 'Impossibile inviare il messaggio');
   }
 });
@@ -385,6 +410,19 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
   const { chatId } = req.body;
   const userId = req.user._id;
   let reservation = null;
+  /**
+   * La risposta rimossa, finché non è stata sostituita.
+   *
+   * Rigenerare cancella il vecchio turno PRIMA di chiamare il modello, perché
+   * altrimenti il modello lo rileggerebbe nel contesto e tenderebbe a
+   * ripeterlo. Fra la cancellazione e la creazione della nuova risposta ci sono
+   * però cinque operazioni che possono fallire — la ricostruzione del contesto,
+   * la moderazione dell'output, la scrittura stessa — e solo il guasto del
+   * modello aveva un ripristino. Su tutti gli altri percorsi il turno spariva
+   * dalla conversazione in modo definitivo: nessun messaggio d'errore lo dice,
+   * e non esiste un annulla.
+   */
+  let removedAssistantTurn = null;
 
   try {
     if (!chatId || !/^[0-9a-fA-F]{24}$/.test(chatId)) {
@@ -421,6 +459,7 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
     // La vecchia risposta esce dal contesto prima di rigenerare, altrimenti il
     // modello la vedrebbe e tenderebbe a ripeterla.
     await Message.findByIdAndDelete(last._id);
+    removedAssistantTurn = last;
 
     const context = await buildContext(chat, character);
 
@@ -434,10 +473,7 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
 
       // La risposta precedente è già stata rimossa: la si ripristina per non
       // lasciare la conversazione monca.
-      await Message.create({
-        chatId, role: 'assistant', content: last.content,
-        tokens: last.tokens, cost: last.cost, model: last.model, simulated: last.simulated
-      });
+      await restoreRemovedTurn();
       await reservation.refund();
       reservation = null;
       return res.status(failure.status).json({ error: failure.error, reason: failure.reason });
@@ -469,6 +505,9 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
       safetyNotice: !outbound.safe
     });
 
+    // Sostituita: da qui in poi non c'è più nulla da ripristinare.
+    removedAssistantTurn = null;
+
     await Chat.findByIdAndUpdate(chatId, { lastMessageAt: new Date() });
     const freshUser = await User.findById(userId).select('credits subscription');
 
@@ -478,11 +517,40 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
       user: { credits: freshUser.credits, subscription: freshUser.subscription }
     });
   } catch (error) {
-    console.error('Regenerate error:', error);
+    // Prima il rimborso, poi il ripristino: sono indipendenti, e se il secondo
+    // fallisce non deve impedire il primo.
     if (reservation) {
-      try { await reservation.refund(); } catch (e) { console.error('Refund failed:', e.message); }
+      try { await reservation.refund(); } catch (e) { warnFailure(req, e, 'Rimborso dei crediti non riuscito'); }
     }
-    res.status(500).json({ error: 'Impossibile rigenerare la risposta' });
+    try {
+      await restoreRemovedTurn();
+    } catch (e) {
+      warnFailure(req, e, 'Ripristino della risposta rimossa non riuscito: la conversazione resta monca');
+    }
+    serverFailure(req, res, error, 'Impossibile rigenerare la risposta');
+  }
+
+  /**
+   * Rimette la risposta rimossa esattamente com'era.
+   *
+   * Idempotente: chiamarla due volte non duplica nulla, perché azzera il
+   * riferimento. Serve perché il ramo di guasto del modello ripristina già per
+   * conto suo, e il `catch` esterno la richiama comunque.
+   */
+  async function restoreRemovedTurn() {
+    if (!removedAssistantTurn) return;
+    const turn = removedAssistantTurn;
+    removedAssistantTurn = null;
+    await Message.create({
+      chatId,
+      role: 'assistant',
+      content: turn.content,
+      tokens: turn.tokens,
+      cost: turn.cost,
+      model: turn.model,
+      simulated: turn.simulated,
+      safetyNotice: turn.safetyNotice
+    });
   }
 });
 
@@ -502,8 +570,7 @@ router.delete('/item/:messageId', requireAuth, async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete message error:', error);
-    res.status(500).json({ error: 'Impossibile eliminare il messaggio' });
+    serverFailure(req, res, error, 'Impossibile eliminare il messaggio');
   }
 });
 
@@ -553,8 +620,7 @@ router.get('/:chatId', requireAuth, async (req, res) => {
       nextCursor: page.length > 0 ? page[0].createdAt : null
     });
   } catch (error) {
-    console.error('Get messages error:', error);
-    res.status(500).json({ error: 'Impossibile recuperare lo storico dei messaggi' });
+    serverFailure(req, res, error, 'Impossibile recuperare lo storico dei messaggi');
   }
 });
 

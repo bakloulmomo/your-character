@@ -91,6 +91,23 @@ async function main() {
   // percorso registra un account per volta dallo stesso indirizzo.
   process.env.REGISTER_RATE_MAX = process.env.REGISTER_RATE_MAX || '200';
   process.env.LOGIN_RATE_MAX = process.env.LOGIN_RATE_MAX || '200';
+  /**
+   * Limite GENERALE, alzato qui e solo qui.
+   *
+   * Nel prodotto sono 240 richieste al minuto per chiave: una soglia scelta per
+   * fermare uno script senza mai incontrare una persona. Ma la suite end-to-end
+   * *è* uno script — attraversa nove pagine a due larghezze, registra account e
+   * invia una dozzina di messaggi, tutto in due minuti dallo stesso indirizzo.
+   * Comprime in centoventi secondi quello che una persona farebbe in un'ora.
+   *
+   * Misurato: con il valore di produzione l'ultimo test della suite riceveva
+   * 429 su `/chats` e `/messages` e falliva per una ragione che non gli
+   * apparteneva — il classico test rosso che non racconta nulla del prodotto.
+   *
+   * La soglia del prodotto resta intatta: `globalRateLimit.test.js` la verifica
+   * al suo valore reale, accendendo il limitatore di proposito.
+   */
+  process.env.GLOBAL_RATE_MAX = process.env.GLOBAL_RATE_MAX || '5000';
 
   await mongoose.connect(uri);
   const Character = require('../models/Character');

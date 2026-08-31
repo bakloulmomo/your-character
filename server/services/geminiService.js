@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 const { aiMode } = require('../config/env');
+const logger = require('./logger');
 
 // Il client viene creato pigramente: la modalità dipende dall'ambiente e nei
 // test viene commutata a runtime, quindi non può essere decisa all'import.
@@ -244,7 +245,7 @@ async function generateResponse(context, characterName = 'Character') {
     // identità, così la rotta può rispondere all'utente in modo pertinente.
     if (error && error.safetyBlocked) throw error;
     if (isQuotaError(error)) throw new QuotaExceededError();
-    console.error('Gemini API Service Error:', error);
+    logger.error({ err: { message: error && error.message } }, 'Chiamata al modello non riuscita');
     throw new Error('Impossibile generare la risposta AI al momento');
   }
 }
@@ -359,7 +360,7 @@ async function generateSummary(oldMessages) {
     const result = await withTimeout(model.generateContent(prompt), LLM_TIMEOUT_MS, 'Gemini (sintesi)');
     return result.response.text();
   } catch (error) {
-    console.error('Summarization Error:', error);
+    logger.error({ err: { message: error && error.message } }, 'Sintesi del contesto non riuscita');
     return `Sintesi di ${oldMessages.length} messaggi precedenti.`;
   }
 }

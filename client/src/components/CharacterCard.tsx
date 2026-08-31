@@ -30,11 +30,11 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
   // Un personaggio pubblico in attesa di revisione compare solo al suo autore,
   // in «I miei personaggi»: senza un'etichetta sembrerebbe già in galleria.
   const pendingBadge = character.isPublic && character.moderationStatus === 'pending' ? (
-    <span className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+    <span className="inline-flex items-center gap-1 rounded-lg border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-micro font-medium text-warning">
       <Clock3 className="h-3 w-3" aria-hidden="true" /> In revisione
     </span>
   ) : character.isPublic && character.moderationStatus === 'rejected' ? (
-    <span className="inline-flex items-center gap-1 rounded-md border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-[10px] font-medium text-danger">
+    <span className="inline-flex items-center gap-1 rounded-lg border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-micro font-medium text-danger">
       Respinto
     </span>
   ) : null;
@@ -47,7 +47,7 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
         setReportModalOpen(true, { type: 'character', id: character._id });
       }}
       aria-label={`Segnala ${character.name}`}
-      className="btn-ghost rounded-lg p-1.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+      className="btn-ghost rounded-lg p-1.5 hover-action"
     >
       <ShieldAlert className="h-4 w-4" aria-hidden="true" />
     </button>
@@ -59,15 +59,15 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
         to={`/character/${character._id}`}
         className="group relative block h-72 w-52 shrink-0 overflow-hidden rounded-2xl border border-line bg-surface transition-colors hover:border-sapphire/60"
       >
-        <Avatar src={character.avatar} name={character.name} size={208} rounded="2xl" className="h-full w-full !rounded-none" />
+        <Avatar src={character.avatar} name={character.name} size={208} fill />
         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
         <div className="absolute inset-x-3 bottom-3">
           <h3 className="font-display text-sm font-semibold leading-tight text-white">{character.name}</h3>
-          <p className="mt-0.5 truncate font-mono text-[10px] text-white/60">@{creatorName(character)}</p>
-          <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-white/75">{character.description}</p>
+          <p className="mt-0.5 truncate text-micro text-white/60">@{creatorName(character)}</p>
+          <p className="mt-1.5 line-clamp-2 text-xs leading-snug text-white/75">{character.description}</p>
         </div>
         {character.isNSFW && (
-          <span className="absolute right-2 top-2 rounded-md bg-danger/90 px-1.5 py-0.5 text-[9px] font-bold text-white">
+          <span className="absolute right-2 top-2 rounded-lg bg-danger/90 px-1.5 py-0.5 text-micro font-bold text-white">
             18+
           </span>
         )}
@@ -87,10 +87,10 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
             <h3 className="truncate text-sm font-semibold text-ink transition-colors group-hover:text-sapphire-glow">
               {character.name}
             </h3>
-            <p className="truncate font-mono text-[10px] text-ink-dim">@{creatorName(character)}</p>
+            <p className="truncate text-micro text-ink-dim">@{creatorName(character)}</p>
             <p className="mt-1 line-clamp-2 text-xs leading-snug text-ink-muted">{character.description}</p>
           </div>
-          <div className="flex items-center gap-1 font-mono text-[10px] text-ink-dim">
+          <div className="flex items-center gap-1 text-micro text-ink-dim">
             <MessageSquare className="h-3 w-3" aria-hidden="true" />
             <span>{chats}</span>
           </div>
@@ -112,7 +112,7 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
         <h3 className="truncate text-sm font-semibold text-ink transition-colors group-hover:text-sapphire-glow">
           {character.name}
         </h3>
-        <p className="mb-2 truncate font-mono text-[10px] text-ink-dim">@{creatorName(character)}</p>
+        <p className="mb-2 truncate text-micro text-ink-dim">@{creatorName(character)}</p>
         {pendingBadge && <div className="mb-2">{pendingBadge}</div>}
         <p className="line-clamp-2 text-xs leading-relaxed text-ink-muted">{character.description}</p>
       </div>
@@ -120,15 +120,15 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
       <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5">
         <div className="flex flex-wrap gap-1">
           {character.tags?.slice(0, 2).map((tag) => (
-            <span key={tag} className="rounded-md bg-sapphire-wash px-1.5 py-0.5 text-[9px] font-medium text-sapphire-glow">
+            <span key={tag} className="rounded-lg bg-sapphire-wash px-1.5 py-0.5 text-micro font-medium text-sapphire-glow">
               {tag}
             </span>
           ))}
           {character.isNSFW && (
-            <span className="rounded-md bg-danger/15 px-1.5 py-0.5 text-[9px] font-bold text-danger">18+</span>
+            <span className="rounded-lg bg-danger/15 px-1.5 py-0.5 text-micro font-bold text-danger">18+</span>
           )}
         </div>
-        <div className="flex items-center gap-1 font-mono text-[10px] text-ink-dim">
+        <div className="flex items-center gap-1 text-micro text-ink-dim">
           <MessageSquare className="h-3 w-3" aria-hidden="true" />
           <span>{chats}</span>
         </div>

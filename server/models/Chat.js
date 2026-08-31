@@ -49,11 +49,38 @@ const chatSchema = new mongoose.Schema({
   }
 });
 
-chatSchema.index({ userId: 1, updatedAt: -1 });
+/**
+ * L'indice della cronologia segue `lastMessageAt`, non `updatedAt`.
+ *
+ * È il campo su cui la lista viene ordinata e quello che l'interfaccia mostra
+ * accanto a ogni riga («questo minuto», «13 minuti fa»): ordinare su un campo e
+ * mostrarne un altro produce una lista le cui etichette contraddicono il
+ * proprio ordine.
+ */
+chatSchema.index({ userId: 1, lastMessageAt: -1 });
 chatSchema.index({ userId: 1, characterId: 1 });
 
 chatSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  next();
+});
+
+/**
+ * `updatedAt` va aggiornato anche quando si scrive per query.
+ *
+ * Il hook `pre('save')` qui sopra copriva solo `doc.save()`. Ma ogni messaggio
+ * inviato aggiorna la chat con `findByIdAndUpdate`, che NON lo esegue: misurato,
+ * `updatedAt` restava identico a `createdAt` per tutta la vita della
+ * conversazione. Era un campo che dichiarava una cosa falsa, esposto nella
+ * risposta della API e usato per ordinare la cronologia — con il risultato che
+ * la chat a cui si era appena risposto compariva SOTTO una più vecchia e mai
+ * toccata.
+ *
+ * L'ordinamento ora usa `lastMessageAt`; questo hook serve perché `updatedAt`
+ * smetta comunque di mentire a chiunque altro lo legga.
+ */
+chatSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], function(next) {
+  this.set({ updatedAt: new Date() });
   next();
 });
 

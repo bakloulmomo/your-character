@@ -1,5 +1,6 @@
 import { ArrowLeft, ShieldCheck, Trash2, Download, Lock, Globe2, Clock, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 /**
  * Informativa sulla privacy (FASE D — S2-5).
@@ -90,6 +91,7 @@ function Section({ title, icon: Icon, children }: { title: string; icon?: typeof
 }
 
 export default function PrivacyPage() {
+  useDocumentTitle('Informativa privacy');
   return (
     <div className="min-h-screen bg-bg font-sans text-ink">
       <header className="glass-panel sticky top-0 z-50 border-b border-line px-6 py-4">
@@ -104,7 +106,7 @@ export default function PrivacyPage() {
           </Link>
           <div>
             <h1 className="font-display text-lg font-bold text-ink">Informativa sulla privacy</h1>
-            <p className="font-mono text-xs text-ink-dim">Ultimo aggiornamento: 28 agosto 2026</p>
+            <p className="text-xs text-ink-dim">Ultimo aggiornamento: 28 agosto 2026</p>
           </div>
         </div>
       </header>
@@ -112,7 +114,7 @@ export default function PrivacyPage() {
       <main className="mx-auto max-w-4xl px-6 py-12">
         <div className="glass-card space-y-8 rounded-2xl border border-line p-8">
           <section>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-600/10 px-3 py-1.5 text-xs font-medium text-success">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
               <ShieldCheck className="h-4 w-4" /> Regolamento (UE) 2016/679
             </div>
             <p className="leading-relaxed text-ink-muted">
@@ -156,7 +158,7 @@ export default function PrivacyPage() {
             </div>
             <p className="text-sm">
               L’autenticazione avviene con email e password e una sessione firmata (JWT) conservata in un
-              cookie <code className="font-mono text-blue-300">yc_token</code> di tipo HttpOnly.
+              cookie <code className="font-mono text-sapphire-glow">yc_token</code> di tipo HttpOnly.
             </p>
           </Section>
 
@@ -199,7 +201,7 @@ export default function PrivacyPage() {
               {LEGAL_BASES.map(([what, basis]) => (
                 <li key={what} className="flex flex-col gap-0.5 rounded-lg border border-line bg-surface p-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
                   <span className="text-ink">{what}</span>
-                  <span className="shrink-0 font-mono text-xs text-ink-dim">{basis}</span>
+                  <span className="shrink-0 text-xs text-ink-dim">{basis}</span>
                 </li>
               ))}
             </ul>
@@ -223,7 +225,7 @@ export default function PrivacyPage() {
               senza scrivere a nessuno e senza attese.
             </p>
             <div className="space-y-4">
-              <div className="flex items-start gap-4 rounded-xl border border-blue-800/40 bg-blue-950/20 p-4">
+              <div className="flex items-start gap-4 rounded-xl border border-sapphire/30 bg-sapphire-wash p-4">
                 <Download className="mt-1 h-6 w-6 shrink-0 text-sapphire-glow" />
                 <div>
                   <h3 className="text-sm font-semibold text-ink">Accesso e portabilità (artt. 15 e 20)</h3>
@@ -233,7 +235,7 @@ export default function PrivacyPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-4 rounded-xl border border-red-800/40 bg-red-950/20 p-4">
+              <div className="flex items-start gap-4 rounded-xl border border-danger/30 bg-danger/10 p-4">
                 <Trash2 className="mt-1 h-6 w-6 shrink-0 text-danger" />
                 <div>
                   <h3 className="text-sm font-semibold text-ink">Cancellazione (art. 17)</h3>
@@ -254,7 +256,7 @@ export default function PrivacyPage() {
 
           <Section title="6. Cookie">
             <p className="text-sm">
-              Usiamo un solo cookie tecnico, <code className="font-mono text-blue-300">yc_token</code>,
+              Usiamo un solo cookie tecnico, <code className="font-mono text-sapphire-glow">yc_token</code>,
               per mantenere la sessione: è necessario al funzionamento e non richiede consenso. Non
               utilizziamo cookie analitici né pubblicitari. L’unica scelta facoltativa riguarda il
               caricamento anticipato dello script di pagamento di Stripe, ed è revocabile in qualsiasi

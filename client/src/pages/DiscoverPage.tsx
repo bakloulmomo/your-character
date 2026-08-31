@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import CharacterCard from '../components/CharacterCard';
 import CharacterRow from '../components/CharacterRow';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 // Le categorie sono quelle realmente accettate dal server, non etichette
 // decorative: prima Feed / Charms / Labs non filtravano nulla (S3-2, S3-3).
@@ -20,6 +21,7 @@ const CATEGORIES = [
 ];
 
 export default function DiscoverPage() {
+  useDocumentTitle();
   const user = useStore((s) => s.user);
   const [category, setCategory] = useState('all');
 
@@ -28,10 +30,23 @@ export default function DiscoverPage() {
   const anime = useCharacters({ category: 'anime', limit: 12, enabled: category === 'all' });
   const gaming = useCharacters({ category: 'gaming', limit: 12, enabled: category === 'all' });
 
+  /**
+   * I caroselli mostrano solo ciò che non è già nella griglia sopra.
+   *
+   * «In evidenza» chiede i primi 24 personaggi senza filtro di categoria: su un
+   * catalogo piccolo li contiene quasi tutti, e le righe «Anime» e «Gaming»
+   * ripresentavano gli stessi identici personaggi qualche centimetro più in
+   * basso. Tre sezioni con nomi diversi e lo stesso contenuto fanno sembrare il
+   * catalogo più grande di quello che è, che è esattamente il difetto opposto a
+   * quello che una galleria dovrebbe fare.
+   */
+  const shown = new Set(featured.characters.map((c) => c._id));
+  const notAlreadyShown = (list: typeof featured.characters) => list.filter((c) => !shown.has(c._id));
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
       <header className="mb-8">
-        <p className="font-mono text-xs text-ink-dim">Ti diamo il benvenuto,</p>
+        <p className="text-xs text-ink-dim">Ti diamo il benvenuto,</p>
         <h1 className="font-display text-3xl font-bold tracking-tight text-ink">
           {user ? `@${user.username}` : 'Viandante'}
         </h1>
@@ -92,10 +107,10 @@ export default function DiscoverPage() {
           </section>
 
           {category === 'all' && anime.status === 'ready' && (
-            <CharacterRow title="Anime" characters={anime.characters} variant="poster" />
+            <CharacterRow title="Anime" characters={notAlreadyShown(anime.characters)} variant="poster" />
           )}
           {category === 'all' && gaming.status === 'ready' && (
-            <CharacterRow title="Gaming" characters={gaming.characters} />
+            <CharacterRow title="Gaming" characters={notAlreadyShown(gaming.characters)} />
           )}
         </>
       )}

@@ -38,14 +38,25 @@ export default function Toaster() {
       // z-[70]: le notifiche stanno sopra i modali. Un avviso di errore
       // nascosto dietro la finestra che l'ha provocato non avvisa nessuno.
       className="pointer-events-none fixed right-4 top-4 z-[70] flex w-full max-w-sm flex-col gap-2"
-      role="status"
-      aria-live="polite"
     >
       {toasts.map((toast) => {
         const Icon = ICONS[toast.kind];
         return (
           <div
             key={toast.id}
+            /**
+             * Il ruolo sta sulla singola notifica, non sul contenitore, e
+             * dipende dal tono.
+             *
+             * Prima l'intero riquadro era un solo `role="status"` con
+             * `aria-live="polite"`: un errore veniva quindi annunciato solo
+             * quando lo screen reader finiva ciò che stava già leggendo — e
+             * siccome la notifica sparisce da sola dopo cinque secondi, poteva
+             * benissimo non essere annunciata affatto. «Il messaggio non è
+             * stato inviato» non è un'informazione che può aspettare.
+             */
+            role={toast.kind === 'error' ? 'alert' : 'status'}
+            aria-live={toast.kind === 'error' ? 'assertive' : 'polite'}
             className={`animate-slide-down glass-panel pointer-events-auto flex items-start gap-2.5 rounded-xl border px-4 py-3 shadow-xl ${TONES[toast.kind]}`}
           >
             <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

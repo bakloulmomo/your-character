@@ -4,9 +4,12 @@ import { CheckCircle2, Circle, Eye, EyeOff, Loader2, KeyRound } from 'lucide-rea
 import api from '../services/api';
 import { useStore } from '../store/useStore';
 import { EmptyState } from '../components/ui/States';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { errorMessage } from '../lib/apiError';
 
 /** Destinazione del link inviato per email. */
 export default function ResetPasswordPage() {
+  useDocumentTitle('Nuova password');
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const notify = useStore((s) => s.notify);
@@ -52,7 +55,7 @@ export default function ResetPasswordPage() {
       navigate('/');
       setAuthModalOpen(true, 'login');
     } catch (err: any) {
-      setError(err.response?.data?.error ?? 'Impossibile reimpostare la password.');
+      setError(errorMessage(err, 'Impossibile reimpostare la password.'));
     } finally {
       setSaving(false);
     }

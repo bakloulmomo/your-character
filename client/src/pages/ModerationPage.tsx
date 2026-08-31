@@ -5,7 +5,10 @@ import api from '../services/api';
 import { useStore } from '../store/useStore';
 import { EmptyState, ErrorState, Spinner } from '../components/ui/States';
 import Avatar from '../components/ui/Avatar';
+import Modal from '../components/ui/Modal';
 import { relativeTime } from '../lib/format';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { errorMessage } from '../lib/apiError';
 
 /**
  * Coda di moderazione (FASE D — S2-2, S2-13).
@@ -65,6 +68,7 @@ const REASON_LABELS: Record<string, string> = {
 };
 
 export default function ModerationPage() {
+  useDocumentTitle('Moderazione');
   const { user, notify } = useStore();
   const [tab, setTab] = useState<'characters' | 'reports'>('characters');
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -72,6 +76,18 @@ export default function ModerationPage() {
   const [characters, setCharacters] = useState<PendingCharacter[]>([]);
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [working, setWorking] = useState<string | null>(null);
+  /**
+   * Personaggio per cui si sta scrivendo una motivazione di rifiuto.
+   *
+   * Prima la motivazione si chiedeva con `window.prompt()`: una finestra di
+   * sistema, senza stile, senza limite di lunghezza, senza modo di annullare
+   * distinguendo «ho cambiato idea» da «non ho scritto niente» — e in alcuni
+   * contesti bloccata dal browser, nel qual caso la decisione negativa
+   * semplicemente non si poteva prendere. È lo stesso difetto già corretto
+   * quando l'esportazione dei dati usava `alert()`.
+   */
+  const [rejecting, setRejecting] = useState<PendingCharacter | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const isStaff = user?.role === 'moderator' || user?.role === 'admin';
 
@@ -108,21 +124,20 @@ export default function ModerationPage() {
   if (status === 'loading') return <Spinner label="Caricamento della coda…" />;
   if (status === 'error') return <ErrorState title="Impossibile caricare la coda di moderazione" onRetry={load} />;
 
-  const decideCharacter = async (id: string, moderationStatus: 'approved' | 'rejected') => {
-    let moderationReason = '';
-    if (moderationStatus === 'rejected') {
-      // Una decisione negativa deve poter essere spiegata a chi l'ha subita.
-      moderationReason = window.prompt('Motivazione del rifiuto (verrà mostrata all’autore):') ?? '';
-      if (!moderationReason.trim()) return;
-    }
-
+  const decideCharacter = async (
+    id: string,
+    moderationStatus: 'approved' | 'rejected',
+    moderationReason = ''
+  ) => {
     setWorking(id);
     try {
       await api.patch(`/admin/characters/${id}`, { moderationStatus, moderationReason });
       setCharacters((prev) => prev.filter((c) => c._id !== id));
+      setRejecting(null);
+      setRejectReason('');
       notify(moderationStatus === 'approved' ? 'Personaggio approvato.' : 'Personaggio respinto.', 'success');
     } catch (err: any) {
-      notify(err.response?.data?.error ?? 'Operazione non riuscita.', 'error');
+      notify(errorMessage(err, 'Operazione non riuscita.'), 'error');
     } finally {
       setWorking(null);
     }
@@ -150,7 +165,7 @@ export default function ModerationPage() {
       }`}
     >
       {label}
-      <span className="rounded-md bg-bg px-1.5 py-0.5 font-mono text-[10px]">{count}</span>
+      <span className="rounded-lg bg-bg px-1.5 py-0.5 text-micro">{count}</span>
     </button>
   );
 
@@ -180,12 +195,12 @@ export default function ModerationPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-display text-base font-semibold text-ink">{c.name}</h2>
-                      {c.isNSFW && <span className="rounded-md bg-danger/15 px-1.5 py-0.5 text-[10px] font-bold text-danger">18+</span>}
-                      <span className="flex items-center gap-1 font-mono text-[10px] text-ink-dim">
+                      {c.isNSFW && <span className="rounded-lg bg-danger/15 px-1.5 py-0.5 text-micro font-bold text-danger">18+</span>}
+                      <span className="flex items-center gap-1 text-micro text-ink-dim">
                         <Clock3 className="h-3 w-3" aria-hidden="true" /> {relativeTime(c.createdAt)}
                       </span>
                     </div>
-                    <p className="font-mono text-[10px] text-ink-dim">
+                    <p className="text-micro text-ink-dim">
                       di @{c.createdBy?.username ?? 'sconosciuto'}
                     </p>
                     <p className="mt-2 text-sm text-ink-muted">{c.description}</p>
@@ -194,7 +209,7 @@ export default function ModerationPage() {
                         è esattamente ciò che va letto prima di approvare. */}
                     <details className="mt-3">
                       <summary className="cursor-pointer text-xs text-sapphire-glow">Istruzioni del personaggio</summary>
-                      <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-bg p-3 font-mono text-[11px] text-ink-muted">
+                      <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-bg p-3 font-mono text-xs text-ink-muted">
                         {c.systemPrompt || c.personality}
                       </pre>
                     </details>
@@ -203,7 +218,7 @@ export default function ModerationPage() {
 
                 <div className="mt-4 flex justify-end gap-2 border-t border-line pt-4">
                   <button
-                    onClick={() => decideCharacter(c._id, 'rejected')}
+                    onClick={() => { setRejecting(c); setRejectReason(''); }}
                     disabled={working === c._id}
                     className="flex items-center gap-1.5 rounded-xl border border-danger/50 px-4 py-2 text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
                   >
@@ -232,7 +247,7 @@ export default function ModerationPage() {
             {reports.map((r) => (
               <li key={r._id} className="rounded-2xl border border-line bg-surface p-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                  <span className={`flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-micro font-medium ${
                     r.source === 'automatic'
                       ? 'border border-warning/40 bg-warning/10 text-warning'
                       : 'border border-line bg-bg text-ink-muted'
@@ -242,14 +257,14 @@ export default function ModerationPage() {
                   </span>
                   <span className="text-sm font-semibold text-ink">{REASON_LABELS[r.reason] ?? r.reason}</span>
                   {r.occurrences > 1 && (
-                    <span className="rounded-md bg-danger/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-danger">
+                    <span className="rounded-lg bg-danger/15 px-1.5 py-0.5 text-micro font-bold text-danger">
                       ×{r.occurrences}
                     </span>
                   )}
-                  <span className="font-mono text-[10px] text-ink-dim">{relativeTime(r.createdAt)}</span>
+                  <span className="text-micro text-ink-dim">{relativeTime(r.createdAt)}</span>
                 </div>
 
-                <p className="mt-2 font-mono text-xs text-ink-dim">
+                <p className="mt-2 text-xs text-ink-dim">
                   {r.targetType === 'character' ? 'Personaggio' : r.targetType === 'message' ? 'Messaggio' : 'Utente'}
                   {r.targetOwnerId?.username ? ` · di @${r.targetOwnerId.username}` : ''}
                   {r.targetType === 'character' && (
@@ -262,7 +277,7 @@ export default function ModerationPage() {
                 {r.description && <p className="mt-2 text-sm text-ink-muted">{r.description}</p>}
 
                 {r.evidence && (
-                  <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-bg p-3 font-mono text-[11px] text-ink-muted">
+                  <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-bg p-3 font-mono text-xs text-ink-muted">
                     {r.evidence}
                   </pre>
                 )}
@@ -289,6 +304,45 @@ export default function ModerationPage() {
           </ul>
         )
       )}
+
+      <Modal
+        open={rejecting !== null}
+        onClose={() => setRejecting(null)}
+        title={rejecting ? `Respingere ${rejecting.name}?` : 'Respingere'}
+      >
+        <p className="mb-3 text-sm text-ink-muted">
+          La motivazione viene mostrata all'autore sulla scheda del personaggio. È l'unica cosa che
+          gli spiega perché non è comparso in galleria: una decisione senza motivazione è
+          indistinguibile da un guasto.
+        </p>
+        <label htmlFor="reject-reason" className="mb-1.5 block text-sm font-medium text-ink">
+          Motivazione
+        </label>
+        <textarea
+          id="reject-reason"
+          rows={4}
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          maxLength={500}
+          placeholder="Es. la descrizione riprende un personaggio protetto da copyright."
+          className="input-field resize-y"
+        />
+        <p className="mt-1 text-right text-micro text-ink-dim">{rejectReason.length}/500</p>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={() => setRejecting(null)} className="btn-secondary rounded-xl px-4 py-2 text-sm">
+            Annulla
+          </button>
+          <button
+            onClick={() => rejecting && decideCharacter(rejecting._id, 'rejected', rejectReason.trim())}
+            disabled={!rejectReason.trim() || working === rejecting?._id}
+            className="flex items-center gap-2 rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/85 disabled:opacity-40"
+          >
+            {working === rejecting?._id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            Respingi
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

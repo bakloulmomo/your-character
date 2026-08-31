@@ -8,23 +8,30 @@ export default {
       // architettura e mai realizzato. Sostituisce la palette zinc improvvisata
       // dell'app e il tema slate scollegato delle pagine legali.
       colors: {
+        // Scala di elevazione, dal piu' profondo al piu' vicino. E' monotona:
+        // ogni gradino e' piu' chiaro del precedente. Prima `surface.sunken`
+        // (#0A0E18) era piu' CHIARO del fondo pagina (#060913), quindi un campo
+        // di testo «incassato» sporgeva dalla pagina invece di rientrarci.
         bg: {
-          DEFAULT: '#060913',   // fondo profondo
-          elevated: '#0B0F19'   // barre e superfici di primo livello
+          DEFAULT: '#05070E',   // fondo pagina
+          elevated: '#0A0E17'   // barre laterali, intestazioni, pannelli
         },
         surface: {
-          DEFAULT: '#111827',
-          hover: '#162032',
-          sunken: '#0A0E18'
+          DEFAULT: '#111827',   // schede e riquadri appoggiati sul fondo
+          hover: '#182234',
+          sunken: '#0B111E'     // campi di testo: piu' scuri della scheda che li ospita
         },
         line: {
           DEFAULT: '#1E293B',
           strong: '#2C3B52'
         },
+        // `dim` era #64748B: 4.2:1 sul fondo, sotto il minimo di 4.5:1 — ed era
+        // il colore applicato al testo piu' piccolo dell'interfaccia, dove il
+        // contrasto conta di piu'. Ora sta a 6.5:1.
         ink: {
           DEFAULT: '#F8FAFC',
-          muted: '#94A3B8',
-          dim: '#64748B'
+          muted: '#9FB0C6',
+          dim: '#8496AE'
         },
         sapphire: {
           DEFAULT: '#2563EB',
@@ -37,12 +44,33 @@ export default {
         success: '#10B981',
         warning: '#F59E0B'
       },
+      /**
+       * Un solo gradino sotto `text-xs`, e non piu' basso di 11px.
+       *
+       * Il codice usava `text-[9px]`, `text-[10px]` e `text-[11px]` in 54
+       * punti: tre misure arbitrarie inventate una alla volta, tutte sotto la
+       * soglia in cui un testo resta leggibile, e quasi sempre colorate con il
+       * grigio piu' debole della tavolozza. Le tre misure diventano una sola,
+       * dichiarata qui, con la sua interlinea.
+       */
+      fontSize: {
+        micro: ['0.6875rem', { lineHeight: '1rem' }]
+      },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         display: ['Outfit', 'Inter', 'sans-serif'],
-        // Caricato davvero in index.html: prima era dichiarato qui e usato su
-        // decine di elementi senza che il font venisse mai scaricato.
-        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace']
+        /**
+         * Monospazio di sistema, non piu' un terzo carattere scaricato.
+         *
+         * JetBrains Mono veniva usato su 42 elementi che non sono codice: il
+         * saluto della home, i nomi utente, i conteggi, gli orari, le etichette
+         * di sezione. Il monospazio su testo normale non aggiunge significato,
+         * lo rende solo piu' difficile da leggere e piu' largo. Resta dov'e'
+         * davvero codice — i prompt grezzi nella coda di moderazione e il nome
+         * del cookie nell'informativa — e per quei pochi punti il carattere di
+         * sistema basta, senza una terza richiesta di rete al primo caricamento.
+         */
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
       },
       keyframes: {
         // Queste animazioni erano usate in 14 punti e non esistevano.

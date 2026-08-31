@@ -9,6 +9,7 @@ const Character = require('../models/Character');
 const Message = require('../models/Message');
 const Chat = require('../models/Chat');
 const User = require('../models/User');
+const { serverFailure } = require('../services/failure');
 
 /**
  * Risolve il proprietario del contenuto segnalato, così chi esamina non deve
@@ -105,8 +106,7 @@ router.post('/', requireAuth, reportLimiter, validate(createReportSchema), async
       });
     }
 
-    console.error('Create report error:', error);
-    res.status(500).json({ error: 'Impossibile inviare la segnalazione' });
+    serverFailure(req, res, error, 'Impossibile inviare la segnalazione');
   }
 });
 

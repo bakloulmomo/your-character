@@ -3,6 +3,7 @@ const { getAuth } = require('@clerk/express');
 const User = require('../models/User');
 const { jwtSecret, isTest, welcomeCredits } = require('../config/env');
 const { applyBanExpiry } = require('../utils/time');
+const { serverFailure, warnFailure } = require('../services/failure');
 
 /**
  * Estrae il token dalla richiesta: header Authorization o cookie di sessione.
@@ -102,7 +103,11 @@ const attachUser = async (req, res, next) => {
     req.user = user && !user.isBanned ? user : null;
     next();
   } catch (error) {
-    console.error('attachUser error:', error);
+    // L'autenticazione facoltativa non deve far fallire la richiesta, ma un
+    // guasto qui degrada in silenzio un utente connesso ad anonimo: senza
+    // traccia, il sintomo è «ogni tanto mi ritrovo disconnesso» e non c'è nulla
+    // da cercare nei log.
+    warnFailure(req, error, 'Risoluzione facoltativa dell\'utente non riuscita');
     req.user = null;
     next();
   }
@@ -130,8 +135,7 @@ const requireAuth = async (req, res, next) => {
     req.user = dbUser;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    res.status(500).json({ error: 'Errore durante l\'autenticazione' });
+    serverFailure(req, res, error, 'Errore durante l\'autenticazione');
   }
 };
 

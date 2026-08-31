@@ -9,6 +9,8 @@ import MessageBubble from '../components/MessageBubble';
 import Avatar from '../components/ui/Avatar';
 import Modal from '../components/ui/Modal';
 import { EmptyState, ErrorState, Spinner } from '../components/ui/States';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { errorMessage } from '../lib/apiError';
 
 const MAX_LENGTH = 4000;
 
@@ -46,7 +48,9 @@ export default function ChatPage() {
   const [imagePrompt, setImagePrompt] = useState('');
   const [generatingImage, setGeneratingImage] = useState(false);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // Prima di ogni ritorno anticipato: gli hook non possono stare sotto un `if`.
+  useDocumentTitle(character?.name ?? (chatTitle || undefined));
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -64,19 +68,67 @@ export default function ChatPage() {
       .catch(() => setCharacter(null));
   }, [chatId]);
 
-  // Lo scorrimento resta dentro il contenitore della conversazione: prima
-  // `scrollIntoView` muoveva l'intera finestra (S3-16).
+  /**
+   * Scorre il contenitore della conversazione, e SOLO quello.
+   *
+   * `scrollIntoView` è stato sostituito da una scrittura diretta di
+   * `scrollTop`. Due ragioni:
+   *
+   *  · `scrollIntoView` muove ogni antenato scorrevole, non solo il più
+   *    vicino: su telefono poteva spostare la pagina intera. È il difetto
+   *    S3-16, corretto una volta cambiando `block`, ma la causa restava;
+   *  · scrivere `scrollTop = scrollHeight` arriva sempre esattamente in fondo,
+   *    mentre `scrollIntoView` si ferma quando l'elemento «entra» nella vista.
+   *    Misurato all'apertura di una conversazione lunga: si fermava 31px sopra
+   *    il fondo, quindi l'ultima risposta arrivava già tagliata.
+   */
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
 
   useEffect(() => {
-    if (status === 'ready') scrollToBottom('auto');
+    if (status !== 'ready') return;
+
+    /**
+     * Due fotogrammi, non uno.
+     *
+     * Al primo la lista è nel DOM ma il browser non ha ancora terminato il
+     * layout definitivo — gli avatar e le bolle a più righe cambiano ancora
+     * altezza. Scorrere solo lì lasciava la conversazione poco sopra il fondo.
+     */
+    const primo = requestAnimationFrame(() => {
+      scrollToBottom('auto');
+      requestAnimationFrame(() => scrollToBottom('auto'));
+    });
+    return () => cancelAnimationFrame(primo);
   }, [status, scrollToBottom]);
 
   useEffect(() => {
     if (streamingText !== null) scrollToBottom();
   }, [streamingText, scrollToBottom]);
+
+  /**
+   * Carica i messaggi precedenti tenendo fermo quello che si stava leggendo.
+   *
+   * Prima i messaggi venivano semplicemente aggiunti in cima: il contenitore
+   * cresceva verso l'alto mentre `scrollTop` restava dov'era, quindi la
+   * conversazione SALTAVA in avanti di tutta l'altezza appena inserita e si
+   * perdeva il punto in cui si era. Misurando l'altezza prima e dopo e
+   * riposizionando della differenza, sullo schermo non si muove nulla: compare
+   * solo altra conversazione sopra.
+   */
+  const loadOlderKeepingPosition = useCallback(async () => {
+    const el = scrollRef.current;
+    const before = el?.scrollHeight ?? 0;
+    const previousTop = el?.scrollTop ?? 0;
+    await loadOlder();
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.scrollTop = previousTop + (el.scrollHeight - before);
+    });
+  }, [loadOlder]);
 
   // Il campo cresce con il testo, fino a un massimo.
   const autoResize = () => {
@@ -106,6 +158,21 @@ export default function ChatPage() {
     };
     setMessages((prev) => [...prev, optimistic]);
     requestAnimationFrame(() => scrollToBottom());
+
+    /**
+     * Il server ha già preso in carico — e salvato — il messaggio.
+     *
+     * Determina che cosa fare se poi qualcosa fallisce. Finché il messaggio non
+     * è stato accettato, un guasto lo restituisce nel campo di scrittura, così
+     * non va perso. Una volta accettato NON va restituito: il messaggio è in
+     * archivio e resta a schermo, e rimetterlo nel campo faceva credere che non
+     * fosse partito — rinviandolo si otteneva la stessa domanda scritta due
+     * volte nella conversazione.
+     *
+     * Dichiarata fuori dal `try` perché la legge anche il `catch` esterno, che
+     * gestisce la connessione caduta.
+     */
+    let accepted = false;
 
     try {
       // Lo streaming usa `fetch` diretto, quindi non passa dall'interceptor di
@@ -180,6 +247,7 @@ export default function ChatPage() {
           const event = JSON.parse(block.slice(6));
 
           if (event.userMessage) {
+            accepted = true;
             setMessages((prev) =>
               prev.map((m) => (m._id === optimistic._id ? event.userMessage : m))
             );
@@ -197,8 +265,18 @@ export default function ChatPage() {
           }
           if (event.error) {
             notify(event.error, 'error');
-            setMessages((prev) => prev.filter((m) => m._id !== optimistic._id && !m.pending));
-            setInput(text);
+            if (accepted) {
+              // Il messaggio è salvato sul server: resta dov'è, e il campo
+              // resta vuoto. Ricaricando la pagina lo si ritrova, senza
+              // risposta — che è la verità.
+              setMessages((prev) => prev.filter((m) => !m.pending));
+            } else {
+              setMessages((prev) => prev.filter((m) => m._id !== optimistic._id && !m.pending));
+              setInput(text);
+            }
+            // La cronologia va riletta comunque: il server ha aggiornato il
+            // conteggio e la data dell'ultimo messaggio anche in caso di guasto.
+            reloadChats();
           }
           if (event.done) {
             setMessages((prev) => [...prev, event.aiMessage]);
@@ -208,9 +286,17 @@ export default function ChatPage() {
         }
       }
     } catch {
-      setMessages((prev) => prev.filter((m) => m._id !== optimistic._id));
-      setInput(text);
-      notify('Connessione interrotta. Il messaggio non è stato inviato.', 'error');
+      // Connessione caduta. Se il server aveva già confermato il messaggio,
+      // dirgli «non è stato inviato» sarebbe falso: è partito, manca la
+      // risposta.
+      if (accepted) {
+        setMessages((prev) => prev.filter((m) => !m.pending));
+        notify('Connessione interrotta mentre arrivava la risposta. Il tuo messaggio è stato salvato.', 'error');
+      } else {
+        setMessages((prev) => prev.filter((m) => m._id !== optimistic._id));
+        setInput(text);
+        notify('Connessione interrotta. Il messaggio non è stato inviato.', 'error');
+      }
     } finally {
       setStreamingText(null);
       setBusy(false);
@@ -228,7 +314,7 @@ export default function ChatPage() {
       if (typeof res.data.user?.credits === 'number') updateCredits(res.data.user.credits);
     } catch (err: any) {
       if (err.response?.status === 402) handleOutOfCredits();
-      else notify(err.response?.data?.error ?? 'Impossibile rigenerare la risposta.', 'error');
+      else notify(errorMessage(err, 'Impossibile rigenerare la risposta.'), 'error');
     } finally {
       setBusy(false);
     }
@@ -260,7 +346,7 @@ export default function ChatPage() {
         setImageOpen(false);
         handleOutOfCredits();
       } else {
-        notify(err.response?.data?.error ?? 'Impossibile generare l\'immagine.', 'error');
+        notify(errorMessage(err, 'Impossibile generare l\'immagine.'), 'error');
       }
     } finally {
       setGeneratingImage(false);
@@ -300,7 +386,7 @@ export default function ChatPage() {
     character ?? ({ _id: '', name: chatTitle || 'Personaggio', avatar: '', description: '', personality: '', tags: [], category: '', isPublic: true, isNSFW: false, usageCount: 0 } as Character);
 
   return (
-    <div className="flex h-[calc(100dvh_-_var(--yc-banner,0px))] flex-col">
+    <div className="flex h-[calc(100dvh_-_var(--yc-topbar,0px)_-_var(--yc-banner,0px))] flex-col">
       {/* Intestazione */}
       <header className="glass-panel flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -312,7 +398,7 @@ export default function ChatPage() {
               <Avatar src={character.avatar} name={character.name} size={34} />
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-ink">{character.name}</span>
-                <span className="block truncate text-[11px] text-ink-dim">Vedi la scheda</span>
+                <span className="block truncate text-xs text-ink-dim">Vedi la scheda</span>
               </span>
             </Link>
           ) : (
@@ -329,17 +415,31 @@ export default function ChatPage() {
           >
             <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
             <span className="hidden sm:inline">Immagine</span>
-            <span className="font-mono text-[10px] text-ink-dim">10</span>
+            <span className="text-micro text-ink-dim">10</span>
           </button>
         )}
       </header>
 
       {/* Conversazione */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6">
+      {/**
+        * I messaggi si appoggiano al FONDO, non al soffitto.
+        *
+        * Una conversazione appena aperta ha due o tre messaggi: allineati in
+        * alto lasciavano sotto di sé mezzo schermo vuoto, e il campo di
+        * scrittura restava separato dall'ultima riga da un vuoto che non
+        * significava niente. È il comportamento di ogni applicazione di
+        * messaggistica, e la sua assenza è una delle cose che si notano senza
+        * saper dire perché.
+        *
+        * `justify-end` su un contenitore alto quanto la finestra: finché i
+        * messaggi non la riempiono si accumulano in basso; da quel momento in
+        * poi il contenitore cresce e lo scorrimento riprende normalmente.
+        */}
+      <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-end space-y-5 px-4 py-6">
           {hasMore && (
             <div className="flex justify-center">
-              <button onClick={loadOlder} disabled={loadingOlder} className="btn-secondary flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs">
+              <button onClick={loadOlderKeepingPosition} disabled={loadingOlder} className="btn-secondary flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs">
                 {loadingOlder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronUp className="h-3.5 w-3.5" />}
                 Messaggi precedenti
               </button>
@@ -358,7 +458,11 @@ export default function ChatPage() {
             />
           ))}
 
-          {streamingText !== null && (
+          {/* Solo quando c'e' davvero del testo. Finche' `streamingText` e' la
+              stringa vuota l'attesa la racconta l'indicatore qui sotto: prima
+              comparivano ENTRAMBI, cioe' una bolla vuota con il cursore
+              lampeggiante e, sotto, i tre puntini. */}
+          {streamingText !== null && streamingText !== '' && (
             <MessageBubble
               message={{
                 _id: 'streaming',
@@ -373,8 +477,11 @@ export default function ChatPage() {
             />
           )}
 
-          {busy && streamingText === '' && (
-            <div className="flex items-center gap-3">
+          {/* Vale anche per «rigenera», che prima non dava alcun segnale: si
+              premeva il pulsante e per qualche secondo non succedeva nulla di
+              visibile. */}
+          {busy && !streamingText && (
+            <div className="flex items-center gap-3" role="status" aria-label={`${displayCharacter.name} sta scrivendo`}>
               <Avatar src={displayCharacter.avatar} name={displayCharacter.name} size={32} />
               <div className="flex gap-1 rounded-2xl rounded-tl-sm border border-line bg-surface px-4 py-3.5">
                 {[0, 1, 2].map((i) => (
@@ -388,14 +495,13 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div ref={bottomRef} />
         </div>
       </div>
 
       {/* Composizione */}
       <div className="shrink-0 border-t border-line bg-bg-elevated px-4 py-3">
         <div className="mx-auto w-full max-w-3xl">
-          <div className="flex items-end gap-2 rounded-2xl border border-line bg-surface p-2 transition-colors focus-within:border-sapphire">
+          <div className="field-shell flex items-end gap-2 rounded-2xl bg-surface p-2">
             <label htmlFor="composer" className="sr-only">Scrivi un messaggio a {displayCharacter.name}</label>
             <textarea
               id="composer"
@@ -424,9 +530,9 @@ export default function ChatPage() {
           </div>
 
           <div className="mt-1.5 flex items-center justify-between px-1">
-            <p className="text-[10px] text-ink-dim">Invio per inviare · Maiusc+Invio per andare a capo</p>
+            <p className="text-micro text-ink-dim">Invio per inviare · Maiusc+Invio per andare a capo</p>
             {input.length > MAX_LENGTH * 0.8 && (
-              <p className={`font-mono text-[10px] ${input.length >= MAX_LENGTH ? 'text-danger' : 'text-ink-dim'}`}>
+              <p className={`text-micro ${input.length >= MAX_LENGTH ? 'text-danger' : 'text-ink-dim'}`}>
                 {input.length}/{MAX_LENGTH}
               </p>
             )}

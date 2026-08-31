@@ -56,14 +56,14 @@ export default function StripeCheckoutForm({ amountLabel, onSucceeded, onCancel 
       <PaymentElement options={{ layout: 'tabs' }} />
 
       {error && (
-        <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/10 p-3 text-xs text-danger">
+        <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 p-3 text-xs text-danger">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
           <span>{error}</span>
         </div>
       )}
 
       <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
-        <span className="flex items-center gap-1.5 text-[11px] text-ink-dim">
+        <span className="flex items-center gap-1.5 text-xs text-ink-dim">
           <Lock className="h-3.5 w-3.5 text-ink-muted" />
           Pagamento gestito da Stripe
         </span>
@@ -72,14 +72,14 @@ export default function StripeCheckoutForm({ amountLabel, onSucceeded, onCancel 
             type="button"
             onClick={onCancel}
             disabled={submitting}
-            className="btn-secondary rounded-md px-3 py-1.5 text-xs disabled:opacity-50"
+            className="btn-secondary rounded-lg px-3 py-1.5 text-xs disabled:opacity-50"
           >
             Annulla
           </button>
           <button
             type="submit"
             disabled={!stripe || submitting}
-            className="btn-primary flex items-center gap-1.5 rounded-md px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+            className="btn-primary flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-medium disabled:opacity-50"
           >
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {submitting ? 'Elaborazione…' : `Paga ${amountLabel}`}

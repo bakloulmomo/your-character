@@ -147,7 +147,13 @@ export default function Sidebar() {
 
           <nav className="flex flex-col gap-1">
             {navItem('/', 'Scopri', Compass)}
-            {navItem('/search', 'Cerca', Search)}
+            {/* La voce «Cerca» esiste solo da compressa.
+                Da espansa il campo qui sopra porta alla stessa pagina e ci
+                arriva con il termine gia' scritto: averli entrambi significava
+                due comandi identici a due centimetri di distanza, uno dei quali
+                fa meno dell'altro. Da compressa il campo sparisce, e allora la
+                voce e' l'unico modo per arrivarci. */}
+            {collapsed && navItem('/search', 'Cerca', Search)}
             {user && navItem('/profile', 'I miei personaggi', Sparkles)}
             {/* Visibile solo al team: la coda di revisione non è una funzione
                 del prodotto, è uno strumento di lavoro. */}
@@ -160,7 +166,7 @@ export default function Sidebar() {
         <div className="mt-4 flex-1 overflow-y-auto px-3 pb-3">
           {!collapsed && (
             <>
-              <h2 className="px-1 pb-2 font-mono text-[10px] uppercase tracking-widest text-ink-dim">
+              <h2 className="px-1 pb-2 eyebrow">
                 Le tue chat
               </h2>
 
@@ -189,7 +195,7 @@ export default function Sidebar() {
 
               {user && groups.map((group) => (
                 <div key={group.label} className="mb-3">
-                  <p className="px-1 pb-1 text-[10px] font-medium text-ink-dim">{group.label}</p>
+                  <p className="px-1 pb-1 text-micro font-medium text-ink-dim">{group.label}</p>
                   <ul className="space-y-0.5">
                     {group.items.map((chat) => (
                       <li key={chat._id} className="group relative">
@@ -204,7 +210,7 @@ export default function Sidebar() {
                             <span className="block truncate text-xs font-medium text-ink">
                               {chat.character?.name ?? chat.title}
                             </span>
-                            <span className="block truncate text-[10px] text-ink-dim">
+                            <span className="block truncate text-micro text-ink-dim">
                               {relativeTime(chat.lastMessageAt)}
                             </span>
                           </span>
@@ -217,7 +223,7 @@ export default function Sidebar() {
                             setMenuOpenFor(menuOpenFor === chat._id ? null : chat._id);
                           }}
                           aria-label={`Azioni per ${chat.character?.name ?? chat.title}`}
-                          className="btn-ghost absolute right-1 top-1/2 -translate-y-1/2 rounded-lg p-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                          className="btn-ghost absolute right-1 top-1/2 -translate-y-1/2 rounded-lg p-1 hover-action"
                         >
                           <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
@@ -263,14 +269,24 @@ export default function Sidebar() {
 
         {/* Account */}
         <div className="border-t border-line p-3">
-{/* Durante la beta non c'e' nulla da acquistare. Il comando sparisce
-              invece di portare a un listino irraggiungibile. */}
-          {!collapsed && features.payments && (
+{/* Durante la beta non c'e' nulla da acquistare: il comando sparisce
+              invece di portare a un listino irraggiungibile.
+              La condizione `user` non e' un permesso — l'acquisto lo richiede
+              gia' — e' la stessa regola dell'unico primario per volta: a chi
+              non ha ancora un account questo pulsante compariva blu proprio
+              sopra «Registrati», altrettanto blu, e i due si contendevano
+              l'attenzione mentre solo uno dei due e' il passo successivo. */}
+          {user && !collapsed && features.payments && (
             <button
               onClick={() => setBuyCreditsModalOpen(true)}
-              className="btn-primary mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs"
+              className="btn-secondary mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs"
             >
-              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              {/* Secondario, non primario. Il primario della barra laterale e'
+                  «Crea»: e' l'azione che il prodotto vuole far compiere, e due
+                  pulsanti pieni dello stesso blu agli estremi della stessa
+                  colonna se ne contendono l'attenzione. L'icona in accento
+                  tiene comunque l'offerta visibile. */}
+              <Sparkles className="h-3.5 w-3.5 text-sapphire-glow" aria-hidden="true" />
               Passa a Premium
             </button>
           )}
@@ -300,7 +316,7 @@ export default function Sidebar() {
                 {!collapsed && (
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium text-ink">@{user.username}</span>
-                    <span className="block font-mono text-[10px] text-ink-dim">{user.credits} crediti</span>
+                    <span className="block text-micro text-ink-dim">{user.credits} crediti</span>
                   </span>
                 )}
               </button>
@@ -309,7 +325,7 @@ export default function Sidebar() {
                 <div role="menu" className="absolute bottom-full left-0 z-30 mb-2 w-56 rounded-xl border border-line bg-bg-elevated p-1.5 shadow-2xl">
                   <div className="border-b border-line px-3 py-2">
                     <p className="truncate text-xs font-semibold text-ink">{user.username}</p>
-                    <p className="truncate text-[10px] text-ink-dim">{user.email}</p>
+                    <p className="truncate text-micro text-ink-dim">{user.email}</p>
                   </div>
                   <Link to="/profile" role="menuitem" onClick={() => setAccountMenuOpen(false)} className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-ink-muted transition-colors hover:bg-surface hover:text-ink">
                     <UserIcon className="h-4 w-4" aria-hidden="true" /> Profilo

@@ -5,6 +5,24 @@
 @layer base {
   :root {
     color-scheme: dark;
+
+    /**
+     * Altezza della barra superiore, che esiste solo sotto `md`.
+     *
+     * La chat si dimensiona in `100dvh` meno questa variabile. Senza,
+     * sommava la propria altezza piena a quella della barra e finiva 57px
+     * sotto il bordo della finestra: su telefono il campo di scrittura e il
+     * pulsante di invio restavano tagliati fuori dallo schermo al primo
+     * caricamento, e per scrivere bisognava accorgersi di dover scorrere
+     * l'intera pagina — non la conversazione, la pagina.
+     */
+    --yc-topbar: 3.5rem;
+  }
+
+  @media (min-width: 768px) {
+    :root {
+      --yc-topbar: 0px;
+    }
   }
 
   html {
@@ -84,6 +102,62 @@
   }
   .input-field:focus {
     @apply border-sapphire;
+  }
+
+  /**
+   * Etichetta di sezione.
+   *
+   * Prima ogni occorrenza era scritta a mano come
+   * `font-mono text-[10px] uppercase tracking-widest text-ink-dim`: monospazio
+   * su testo che non e' codice, a 10px, nel grigio piu' debole della tavolozza.
+   * Ora e' una sola dichiarazione, leggibile e ripetuta senza riscriverla.
+   */
+  .eyebrow {
+    @apply text-micro font-semibold uppercase tracking-[0.09em] text-ink-dim;
+  }
+
+  /**
+   * Contenitore che porta lui l'indicatore di focus al posto del figlio.
+   *
+   * Il campo di scrittura della chat e' un <textarea> senza bordi dentro un
+   * riquadro arrotondato. La regola globale `:focus-visible` gli disegnava
+   * comunque il proprio anello: siccome il textarea non ha raggio, l'anello
+   * usciva RETTANGOLARE dentro un contenitore arrotondato che nel frattempo si
+   * illuminava anche lui. Due indicatori di focus sovrapposti, uno dei quali
+   * della forma sbagliata. Qui l'anello lo disegna il contenitore, una volta
+   * sola e con il raggio giusto.
+   */
+  /* Il bordo a riposo sta QUI e non sull'elemento: scritto in linea come
+     `border-line` vincerebbe sul `border-sapphire` di questa regola, perche'
+     le utility di Tailwind stanno in un layer piu' forte di questo. E' lo
+     stesso motivo per cui `.input-field` dichiara il proprio bordo. */
+  .field-shell {
+    @apply border border-line transition-colors;
+  }
+  .field-shell:focus-within {
+    @apply border-sapphire ring-2 ring-sapphire/35;
+  }
+  .field-shell :focus-visible {
+    @apply ring-0 ring-offset-0;
+  }
+
+  /**
+   * Azione che compare al passaggio del mouse — dove un mouse c'e'.
+   *
+   * Copia, rigenera, segnala ed elimina erano `opacity-0 group-hover:opacity-100`.
+   * Su un telefono non esiste il passaggio del mouse: quelle quattro azioni
+   * erano invisibili E irraggiungibili, e con loro il menu «elimina
+   * conversazione» nella barra laterale e il pulsante di segnalazione sulle
+   * card. Segnalare un contenuto e' il modo in cui una persona si protegge:
+   * non puo' dipendere dall'avere un mouse.
+   */
+  .hover-action {
+    @apply opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100;
+  }
+  @media (hover: none) {
+    .hover-action {
+      @apply opacity-100;
+    }
   }
 }
 

@@ -4,6 +4,7 @@ import { Search as SearchIcon, SearchX } from 'lucide-react';
 import { useCharacters } from '../hooks/useCharacters';
 import CharacterCard from '../components/CharacterCard';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 /**
  * Pagina di ricerca con indirizzo proprio.
@@ -17,6 +18,8 @@ export default function SearchPage() {
   const initial = params.get('q') ?? '';
   const [term, setTerm] = useState(initial);
   const [debounced, setDebounced] = useState(initial);
+
+  useDocumentTitle(debounced ? `Cerca «${debounced}»` : 'Cerca');
 
   // L'indirizzo resta la fonte di verità: il termine è condivisibile.
   useEffect(() => {

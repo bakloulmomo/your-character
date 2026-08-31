@@ -40,7 +40,7 @@ export default function MessageBubble({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="btn-ghost rounded-lg p-1.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+      className="btn-ghost rounded-lg p-1.5 hover-action"
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
     </button>
@@ -82,7 +82,7 @@ export default function MessageBubble({
           )}
 
           {message.simulated && (
-            <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium text-warning">
+            <p className="mb-1.5 flex items-center gap-1.5 text-micro font-medium text-warning">
               <Sparkles className="h-3 w-3 shrink-0" aria-hidden="true" />
               Risposta simulata — nessun credito addebitato
             </p>
@@ -107,7 +107,7 @@ export default function MessageBubble({
           {message.image && (
             <figure className="mt-3 overflow-hidden rounded-xl border border-line">
               <img src={message.image.url} alt={message.image.prompt} className="max-h-96 w-full object-cover" loading="lazy" />
-              <figcaption className="bg-bg px-3 py-2 font-mono text-[10px] text-ink-dim">
+              <figcaption className="bg-bg px-3 py-2 text-micro text-ink-dim">
                 {message.image.prompt}
               </figcaption>
             </figure>
@@ -115,7 +115,7 @@ export default function MessageBubble({
         </div>
 
         <div className={`flex items-center gap-0.5 ${isUser ? 'flex-row-reverse' : ''}`}>
-          <time className="px-1 font-mono text-[10px] text-ink-dim" dateTime={message.createdAt}>
+          <time className="px-1 text-micro text-ink-dim" dateTime={message.createdAt}>
             {new Date(message.createdAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
           </time>
 

@@ -2,6 +2,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const { isProduction } = require('../config/env');
+const logger = require('./logger');
 
 /**
  * Archiviazione dei file binari generati (immagini).
@@ -76,7 +77,7 @@ async function storeImage(buffer, extension = 'jpeg') {
   if (isProduction()) {
     // Il disco locale di un'istanza serverless è effimero: l'immagine
     // sparirebbe al primo riavvio. Meglio dirlo che perdere i file.
-    console.warn('⚠️  CLOUDINARY_URL non configurato: le immagini sono salvate su disco locale ed andranno perse al riavvio.');
+    logger.warn('CLOUDINARY_URL non configurato: le immagini sono salvate su disco locale e andranno perse al riavvio.');
   }
 
   return storeLocally(buffer, extension);

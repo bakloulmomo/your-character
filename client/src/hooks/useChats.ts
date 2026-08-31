@@ -10,14 +10,30 @@ import { useStore, normalizeChat } from '../store/useStore';
  * personaggio creava una chat nuova e nessuna era più raggiungibile (S3-6).
  */
 export function useChats() {
-  const { chats, chatsStatus, setChats, setChatsStatus, user, removeChat, notify } = useStore();
+  const { chats, chatsStatus, setChats, setChatsStatus, setChatsLoadedFor, removeChat, notify } =
+    useStore();
+
+  /**
+   * Solo l'identificativo, non l'intero oggetto utente.
+   *
+   * `updateCredits` ricrea l'oggetto dopo OGNI messaggio inviato: con l'oggetto
+   * fra le dipendenze, `load` cambiava identità a ogni battuta e la cronologia
+   * si ricaricava da capo in mezzo alla conversazione.
+   */
+  const key = useStore((s) => s.user?.id ?? 'anon');
 
   const load = useCallback(async () => {
-    if (!user) {
+    // Segnato subito, prima di qualunque attesa: è ciò che permette alla
+    // seconda copia dell'hook — montata nello stesso istante — di vedere che la
+    // richiesta è già partita.
+    setChatsLoadedFor(key);
+
+    if (key === 'anon') {
       setChats([]);
       setChatsStatus('ready');
       return;
     }
+
     setChatsStatus('loading');
     try {
       const res = await api.get('/chats');
@@ -26,11 +42,25 @@ export function useChats() {
     } catch {
       setChatsStatus('error');
     }
-  }, [user, setChats, setChatsStatus]);
+  }, [key, setChats, setChatsStatus, setChatsLoadedFor]);
 
   useEffect(() => {
+    /**
+     * Una sola richiesta per utente, anche se l'hook è montato più volte.
+     *
+     * La barra laterale e la pagina aperta (scheda personaggio o conversazione)
+     * usano entrambe questo hook: ogni copia faceva partire il proprio
+     * `GET /chats`, quindi la stessa risposta veniva scaricata due o tre volte a
+     * ogni cambio di pagina. Lo stato era già condiviso nello store — mancava
+     * solo la memoria di averlo già chiesto. `reload()` resta esplicito e
+     * ignora questo controllo.
+     *
+     * Letto da `getState()` e non da una dipendenza: serve a decidere se
+     * partire, non a far ripartire l'effetto quando cambia.
+     */
+    if (useStore.getState().chatsLoadedFor === key) return;
     load();
-  }, [load]);
+  }, [load, key]);
 
   const deleteChat = useCallback(
     async (chatId: string) => {

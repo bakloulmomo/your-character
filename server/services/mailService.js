@@ -1,4 +1,5 @@
 const { isProduction } = require('../config/env');
+const logger = require('./logger');
 
 /**
  * Invio email.
@@ -14,12 +15,12 @@ async function sendMail({ to, subject, text }) {
 
   if (!apiKey) {
     if (isProduction()) {
-      console.error('⚠️  RESEND_API_KEY non configurato: email NON inviata a', to);
+      logger.error({ to }, 'RESEND_API_KEY non configurato: email NON inviata');
       return { delivered: false, reason: 'mailer_non_configurato' };
     }
     // In test il contenuto non viene stampato: renderebbe illeggibile l'output.
     if (process.env.NODE_ENV !== 'test') {
-      console.log(`\n📧 [sviluppo] Email non inviata, contenuto:\n   A: ${to}\n   Oggetto: ${subject}\n   ${text}\n`);
+      logger.info({ to, subject, text }, 'Email non inviata (sviluppo): contenuto registrato');
     }
     return { delivered: false, reason: 'sviluppo' };
   }
@@ -34,7 +35,7 @@ async function sendMail({ to, subject, text }) {
   });
 
   if (!response.ok) {
-    console.error('Invio email fallito:', response.status, await response.text());
+    logger.error({ status: response.status, body: await response.text() }, 'Invio email fallito');
     return { delivered: false, reason: `http_${response.status}` };
   }
 

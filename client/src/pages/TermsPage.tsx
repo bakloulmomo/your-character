@@ -1,21 +1,28 @@
 import { ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
 export default function TermsPage() {
+  useDocumentTitle('Termini di servizio');
   return (
     <div className="min-h-screen bg-bg text-ink">
       {/* Header */}
       <header className="sticky top-0 z-50 glass-panel border-b border-line px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
-          <a
-            href="/"
+          {/* `aria-label` e `aria-hidden`: senza, questo comando è un «link»
+              senza nome — l'icona non è testo. La pagina privacy, che è il suo
+              gemello, li aveva già; qui erano rimasti fuori. */}
+          <Link
+            to="/"
             id="terms-back-btn"
-            className="p-2 rounded-xl text-ink-muted hover:text-ink hover:bg-surface-hover transition-all"
+            aria-label="Torna alla home"
+            className="rounded-xl p-2 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink"
           >
-            <ArrowLeft className="w-5 h-5" />
-          </a>
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          </Link>
           <div>
-            <h1 className="text-lg font-bold text-ink">Termini e Condizioni d'Uso</h1>
-            <p className="text-xs text-ink-dim">Ultimo aggiornamento: 26 Agosto 2026</p>
+            <h1 className="font-display text-lg font-bold text-ink">Termini e Condizioni d'Uso</h1>
+            <p className="text-xs text-ink-dim">Ultimo aggiornamento: 28 agosto 2026</p>
           </div>
         </div>
       </header>
@@ -26,7 +33,7 @@ export default function TermsPage() {
           {/* Intro */}
           <section>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sapphire-wash border border-sapphire/30 text-sapphire-glow text-xs font-medium mb-4">
-              Versione 1.0 • In vigore dal 26/08/2026
+              Versione 1.0 • In vigore dal 28/08/2026
             </div>
             <p className="text-ink-muted leading-relaxed">
               Benvenuto su <span className="text-ink font-semibold">your-character</span> ("Piattaforma"). Accedendo o utilizzando i nostri servizi, accetti di essere vincolato dai seguenti Termini e Condizioni. Leggili attentamente prima di procedere.
@@ -57,7 +64,7 @@ export default function TermsPage() {
                 'Sistema di crediti per accedere alle funzionalità premium',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-sapphire mt-2 shrink-0" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -86,7 +93,7 @@ export default function TermsPage() {
                 'Violare diritti di proprietà intellettuale di terze parti',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-2 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-danger mt-2 shrink-0" />
                   <span>{item}</span>
                 </li>
               ))}

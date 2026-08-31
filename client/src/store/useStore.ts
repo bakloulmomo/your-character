@@ -162,6 +162,16 @@ interface AppState {
   // Cronologia chat (sidebar)
   chats: Chat[];
   chatsStatus: 'idle' | 'loading' | 'ready' | 'error';
+  /**
+   * Per chi la cronologia è già stata chiesta — l'id dell'utente, o `'anon'`.
+   *
+   * `useChats()` è montato insieme dalla barra laterale e dalla pagina aperta:
+   * senza questa memoria ogni copia faceva partire il proprio `GET /chats` e la
+   * stessa risposta veniva scaricata due o tre volte a ogni cambio di pagina.
+   * `null` significa «mai chiesta».
+   */
+  chatsLoadedFor: string | null;
+  setChatsLoadedFor: (key: string | null) => void;
   setChats: (chats: Chat[]) => void;
   setChatsStatus: (status: 'idle' | 'loading' | 'ready' | 'error') => void;
   upsertChat: (chat: Chat) => void;
@@ -245,7 +255,7 @@ export const useStore = create<AppState>((set, get) => ({
     // Il cookie viene cancellato dal server, che e' l'unico a poterlo fare:
     // e' httpOnly. Qui si ripulisce solo lo stato in memoria.
     setAuthToken(null);
-    set({ user: null, token: null, chats: [], chatsStatus: 'idle' });
+    set({ user: null, token: null, chats: [], chatsStatus: 'idle', chatsLoadedFor: null });
   },
 
   updateCredits: (credits) =>
@@ -255,6 +265,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   chats: [],
   chatsStatus: 'idle',
+  chatsLoadedFor: null,
+  setChatsLoadedFor: (chatsLoadedFor) => set({ chatsLoadedFor }),
   setChats: (chats) => set({ chats }),
   setChatsStatus: (chatsStatus) => set({ chatsStatus }),
   upsertChat: (chat) =>
