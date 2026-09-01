@@ -209,7 +209,7 @@ export default function CreateCharacterPage() {
               onClick={() => set('isPublic', false)}
               aria-pressed={!form.isPublic}
               className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors ${
-                !form.isPublic ? 'border-sapphire bg-sapphire-wash' : 'border-line bg-surface hover:border-line-strong'
+                !form.isPublic ? 'border-accent bg-accent-wash' : 'border-line bg-surface hover:border-line-strong'
               }`}
             >
               <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
@@ -223,7 +223,7 @@ export default function CreateCharacterPage() {
               onClick={() => set('isPublic', true)}
               aria-pressed={form.isPublic}
               className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors ${
-                form.isPublic ? 'border-sapphire bg-sapphire-wash' : 'border-line bg-surface hover:border-line-strong'
+                form.isPublic ? 'border-accent bg-accent-wash' : 'border-line bg-surface hover:border-line-strong'
               }`}
             >
               <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
@@ -303,7 +303,7 @@ export default function CreateCharacterPage() {
             type="checkbox"
             checked={form.isNSFW}
             onChange={(e) => set('isNSFW', e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-line bg-surface accent-sapphire"
+            className="mt-0.5 h-4 w-4 rounded border-line bg-surface accent-accent"
           />
           <span>
             <span className="block text-sm text-ink">Contenuti per adulti</span>

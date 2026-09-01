@@ -10,7 +10,7 @@ const ICONS = {
 const TONES = {
   success: 'border-success/40 text-success',
   error: 'border-danger/40 text-danger',
-  info: 'border-sapphire/40 text-sapphire-glow'
+  info: 'border-accent/40 text-accent-glow'
 };
 
 /**

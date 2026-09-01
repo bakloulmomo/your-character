@@ -181,7 +181,7 @@ export default function CharacterPage() {
           {character.tags?.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {character.tags.map((tag) => (
-                <span key={tag} className="rounded-lg bg-sapphire-wash px-2 py-0.5 text-micro font-medium text-sapphire-glow">
+                <span key={tag} className="rounded-lg bg-accent-wash px-2 py-0.5 text-micro font-medium text-accent-glow">
                   {tag}
                 </span>
               ))}
@@ -232,7 +232,7 @@ export default function CharacterPage() {
               <li key={chat._id}>
                 <Link
                   to={`/chat/${chat._id}`}
-                  className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 transition-colors hover:border-sapphire/60 hover:bg-surface-hover"
+                  className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 transition-colors hover:border-accent/60 hover:bg-surface-hover"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-ink">{chat.title}</span>
@@ -249,7 +249,7 @@ export default function CharacterPage() {
       )}
 
       {character.greetingMessage && (
-        <section className="rounded-2xl border border-line bg-surface p-5">
+        <section className="rounded-xl border border-line bg-surface p-5">
           <h2 className="mb-2 eyebrow">Come ti accoglie</h2>
           <p className="text-sm italic leading-relaxed text-ink-muted">«{character.greetingMessage}»</p>
         </section>

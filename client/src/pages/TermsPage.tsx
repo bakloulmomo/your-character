@@ -28,11 +28,11 @@ export default function TermsPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-12">
-        <div className="glass-card rounded-2xl p-8 border border-line space-y-8">
+        <div className="glass-card rounded-xl p-8 border border-line space-y-8">
 
           {/* Intro */}
           <section>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sapphire-wash border border-sapphire/30 text-sapphire-glow text-xs font-medium mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-wash border border-accent/30 text-accent-glow text-xs font-medium mb-4">
               Versione 1.0 • In vigore dal 28/08/2026
             </div>
             <p className="text-ink-muted leading-relaxed">
@@ -64,7 +64,7 @@ export default function TermsPage() {
                 'Sistema di crediti per accedere alle funzionalità premium',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sapphire mt-2 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2 shrink-0" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -116,7 +116,7 @@ export default function TermsPage() {
                 'Puoi segnalare qualsiasi personaggio o messaggio; le segnalazioni sono esaminate da persone e non da un sistema automatico.'
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sapphire mt-2 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2 shrink-0" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -143,7 +143,7 @@ export default function TermsPage() {
               fornitura immediata dei crediti accetti che l'esecuzione cominci subito e riconosci di
               perdere il diritto di recesso per la parte già utilizzata; i crediti non ancora consumati
               restano rimborsabili entro i quattordici giorni. Per esercitare il recesso scrivi a{' '}
-              <a href="mailto:supporto@your-character.app" className="text-sapphire-glow hover:underline">
+              <a href="mailto:supporto@your-character.app" className="text-accent-glow hover:underline">
                 supporto@your-character.app
               </a>.
             </p>
@@ -184,7 +184,7 @@ export default function TermsPage() {
             <h2 className="text-xl font-bold text-ink mb-3">10. Contatti</h2>
             <p className="text-ink-muted leading-relaxed">
               Per domande su questi Termini, contattaci all'indirizzo:{' '}
-              <a href="mailto:legal@your-character.app" className="text-sapphire-glow hover:underline">
+              <a href="mailto:legal@your-character.app" className="text-accent-glow hover:underline">
                 legal@your-character.app
               </a>
             </p>

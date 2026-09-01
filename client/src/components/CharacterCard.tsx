@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MessageSquare, ShieldAlert, Clock3 } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import Avatar from './ui/Avatar';
 import { formatCount } from '../lib/format';
 import { useStore, type Character } from '../store/useStore';
@@ -9,130 +9,149 @@ interface Props {
   variant?: 'grid' | 'row' | 'poster';
 }
 
+/**
+ * Voce di catalogo di un personaggio.
+ *
+ * ─── Cosa è stato tolto, e perché ───
+ *
+ * La versione precedente mostrava sette cose per ogni personaggio: ritratto,
+ * sfumatura, nome, «di @autore», descrizione, due etichette azzurre e un
+ * contatore di conversazioni. Moltiplicato per dodici voci in griglia sono
+ * ottantaquattro elementi che chiedono attenzione per dirne una: chi è questo.
+ *
+ * Restano tre cose — ritratto, nome, descrizione — più una riga di metadati
+ * sottile che si legge solo se la si cerca. Nello specifico sono spariti:
+ *
+ *  · LE ETICHETTE COLORATE. `bg-accent-wash text-accent-glow` su ogni tag
+ *    metteva due macchie azzurre per scheda, ventiquattro in pagina, per un
+ *    dato che nessuno usa per scegliere. I tag ora sono testo grigio in fondo,
+ *    separati da un punto medio, come in un colophon.
+ *
+ *  · «DI @SYSTEM_ADMIN». Su un catalogo curato l'autore è sempre lo stesso e
+ *    l'informazione è rumore. Compare solo quando il personaggio è di un utente
+ *    vero, che è l'unico caso in cui dice qualcosa.
+ *
+ *  · L'ICONA DEL CONTATORE. Il numero da solo con la parola accanto si legge
+ *    meglio del numero preceduto da un fumetto grande quanto lui.
+ *
+ *  · IL SOLLEVAMENTO AL PASSAGGIO DEL MOUSE. Con dodici schede in pagina,
+ *    oggetti che si alzano quando ci passi sopra sono un campo minato.
+ */
 const creatorName = (character: Character) => {
   const by = character.createdBy;
   if (by && typeof by === 'object' && by.username) return by.username;
-  return 'community';
+  return null;
 };
 
-/**
- * Card di un personaggio — un solo componente per tutte le viste.
- *
- * Prima lo stesso markup era duplicato tre volte dentro ExploreView, con
- * metadati inventati (`+Lore` fisso, conteggi sempre a zero) e un `onClick`
- * che creava immediatamente una chat persistente. Ora è un link alla scheda
- * del personaggio: la conversazione si apre da lì, deliberatamente (S3-7, S3-11).
- */
+/** L'autore si nomina solo se non è il catalogo stesso. */
+const CURATED = new Set(['system_admin', 'community', 'catalogo']);
+
 export default function CharacterCard({ character, variant = 'grid' }: Props) {
   const setReportModalOpen = useStore((s) => s.setReportModalOpen);
   const chats = formatCount(character.chatCount ?? character.usageCount);
+  const author = creatorName(character);
+  const showAuthor = author && !CURATED.has(author);
 
-  // Un personaggio pubblico in attesa di revisione compare solo al suo autore,
-  // in «I miei personaggi»: senza un'etichetta sembrerebbe già in galleria.
-  const pendingBadge = character.isPublic && character.moderationStatus === 'pending' ? (
-    <span className="inline-flex items-center gap-1 rounded-lg border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-micro font-medium text-warning">
-      <Clock3 className="h-3 w-3" aria-hidden="true" /> In revisione
-    </span>
-  ) : character.isPublic && character.moderationStatus === 'rejected' ? (
-    <span className="inline-flex items-center gap-1 rounded-lg border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-micro font-medium text-danger">
-      Respinto
-    </span>
-  ) : null;
+  /**
+   * Stato di revisione: solo testo, nessun riquadro colorato.
+   * È un'informazione che riguarda il proprietario e compare solo a lui, in
+   * «I miei personaggi». Non merita un badge che urla in una galleria.
+   */
+  const status =
+    character.isPublic && character.moderationStatus === 'pending' ? (
+      <span className="text-micro font-medium text-warning">In revisione</span>
+    ) : character.isPublic && character.moderationStatus === 'rejected' ? (
+      <span className="text-micro font-medium text-danger">Respinto</span>
+    ) : null;
 
-  const reportButton = (
-    <button
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setReportModalOpen(true, { type: 'character', id: character._id });
-      }}
-      aria-label={`Segnala ${character.name}`}
-      className="btn-ghost rounded-lg p-1.5 hover-action"
-    >
-      <ShieldAlert className="h-4 w-4" aria-hidden="true" />
-    </button>
+  /**
+   * Riga dei metadati: un solo filo di testo, tutto nello stesso grigio.
+   * Il punto medio è il separatore dei colophon, e costa meno di un bordo.
+   */
+  const meta = (
+    <p className="tabular truncate text-micro text-ink-dim">
+      {[
+        showAuthor ? `@${author}` : null,
+        character.isNSFW ? '18+' : null,
+        chats !== '0' ? `${chats} conversazioni` : null,
+        ...(character.tags?.slice(0, 2) ?? [])
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+    </p>
   );
 
+  /* ── Locandina: carosello orizzontale ─────────────────────────────────── */
   if (variant === 'poster') {
     return (
       <Link
         to={`/character/${character._id}`}
-        className="group relative block h-72 w-52 shrink-0 overflow-hidden rounded-2xl border border-line bg-surface transition-colors hover:border-sapphire/60"
+        className="group block w-48 shrink-0"
       >
-        <Avatar src={character.avatar} name={character.name} size={208} fill />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
-        <div className="absolute inset-x-3 bottom-3">
-          <h3 className="font-display text-sm font-semibold leading-tight text-white">{character.name}</h3>
-          <p className="mt-0.5 truncate text-micro text-white/60">@{creatorName(character)}</p>
-          <p className="mt-1.5 line-clamp-2 text-xs leading-snug text-white/75">{character.description}</p>
+        <div className="relative mb-3 aspect-[3/4] overflow-hidden rounded-lg bg-surface">
+          <Avatar src={character.avatar} name={character.name} size={256} fill className="portrait" />
         </div>
-        {character.isNSFW && (
-          <span className="absolute right-2 top-2 rounded-lg bg-danger/90 px-1.5 py-0.5 text-micro font-bold text-white">
-            18+
-          </span>
-        )}
+        <h3 className="title-serif truncate text-base leading-snug">{character.name}</h3>
+        <p className="mt-1 line-clamp-2 text-xs leading-snug text-ink-muted">{character.description}</p>
       </Link>
     );
   }
 
+  /* ── Riga: carosello compatto ─────────────────────────────────────────── */
   if (variant === 'row') {
     return (
       <Link
         to={`/character/${character._id}`}
-        className="group flex h-28 w-72 shrink-0 gap-3 rounded-2xl border border-line bg-surface p-3 transition-colors hover:border-sapphire/60 hover:bg-surface-hover"
+        className="group flex w-72 shrink-0 items-start gap-3.5"
       >
-        <Avatar src={character.avatar} name={character.name} size={56} />
-        <div className="flex min-w-0 flex-1 flex-col justify-between">
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-ink transition-colors group-hover:text-sapphire-glow">
-              {character.name}
-            </h3>
-            <p className="truncate text-micro text-ink-dim">@{creatorName(character)}</p>
-            <p className="mt-1 line-clamp-2 text-xs leading-snug text-ink-muted">{character.description}</p>
-          </div>
-          <div className="flex items-center gap-1 text-micro text-ink-dim">
-            <MessageSquare className="h-3 w-3" aria-hidden="true" />
-            <span>{chats}</span>
-          </div>
+        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-surface">
+          <Avatar src={character.avatar} name={character.name} size={56} fill className="portrait" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="title-serif truncate text-base leading-snug transition-colors group-hover:text-accent-glow">
+            {character.name}
+          </h3>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-ink-muted">{character.description}</p>
         </div>
       </Link>
     );
   }
 
+  /* ── Griglia: la vista principale della galleria ──────────────────────── */
   return (
-    <Link
-      to={`/character/${character._id}`}
-      className="group flex flex-col justify-between rounded-2xl border border-line bg-surface p-4 transition-colors hover:border-sapphire/60 hover:bg-surface-hover"
-    >
-      <div>
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <Avatar src={character.avatar} name={character.name} size={48} />
-          {reportButton}
-        </div>
-        <h3 className="truncate text-sm font-semibold text-ink transition-colors group-hover:text-sapphire-glow">
-          {character.name}
-        </h3>
-        <p className="mb-2 truncate text-micro text-ink-dim">@{creatorName(character)}</p>
-        {pendingBadge && <div className="mb-2">{pendingBadge}</div>}
-        <p className="line-clamp-2 text-xs leading-relaxed text-ink-muted">{character.description}</p>
+    <Link to={`/character/${character._id}`} className="group relative block">
+      {/**
+        * Il ritratto NON ha una sfumatura sopra e il nome NON ci sta dentro.
+        * Prima il testo galleggiava sull'immagine dietro una velatura scura:
+        * costa leggibilità, costa un elemento in più, e obbliga a scurire la
+        * foto proprio nel punto in cui è più interessante. Il nome sta sotto,
+        * dove si legge.
+        */}
+      <div className="relative mb-3.5 aspect-[4/5] overflow-hidden rounded-lg bg-surface">
+        <Avatar src={character.avatar} name={character.name} size={280} fill className="portrait" />
+
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setReportModalOpen(true, { type: 'character', id: character._id });
+          }}
+          aria-label={`Segnala ${character.name}`}
+          className="hover-action absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-md
+                     bg-bg/60 text-ink-muted backdrop-blur-sm transition-colors hover:text-ink"
+        >
+          <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5">
-        <div className="flex flex-wrap gap-1">
-          {character.tags?.slice(0, 2).map((tag) => (
-            <span key={tag} className="rounded-lg bg-sapphire-wash px-1.5 py-0.5 text-micro font-medium text-sapphire-glow">
-              {tag}
-            </span>
-          ))}
-          {character.isNSFW && (
-            <span className="rounded-lg bg-danger/15 px-1.5 py-0.5 text-micro font-bold text-danger">18+</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1 text-micro text-ink-dim">
-          <MessageSquare className="h-3 w-3" aria-hidden="true" />
-          <span>{chats}</span>
-        </div>
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="title-serif truncate text-display-sm transition-colors group-hover:text-accent-glow">
+          {character.name}
+        </h3>
+        {status}
       </div>
+      <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-ink-muted">{character.description}</p>
+      <div className="mt-2">{meta}</div>
     </Link>
   );
 }

@@ -12,9 +12,7 @@
      * La chat si dimensiona in `100dvh` meno questa variabile. Senza,
      * sommava la propria altezza piena a quella della barra e finiva 57px
      * sotto il bordo della finestra: su telefono il campo di scrittura e il
-     * pulsante di invio restavano tagliati fuori dallo schermo al primo
-     * caricamento, e per scrivere bisognava accorgersi di dover scorrere
-     * l'intera pagina — non la conversazione, la pagina.
+     * pulsante di invio restavano tagliati fuori dallo schermo.
      */
     --yc-topbar: 3.5rem;
   }
@@ -31,62 +29,110 @@
 
   body {
     @apply bg-bg text-ink font-sans antialiased;
-    letter-spacing: -0.011em;
+    letter-spacing: 0;
   }
 
-  /* Stato di focus visibile su tutto ciò che è raggiungibile da tastiera.
-     Prima non esisteva: navigare senza mouse era impossibile. */
+  /**
+   * Cifre di larghezza fissa — SOLO dove ci sono cifre.
+   *
+   * Applicato al `body`, `tabular-nums` non tocca solo i numeri: in Schibsted
+   * Grotesk la virgola e il punto hanno una variante tabellare larga quanto una
+   * cifra, e con la funzione attiva su tutta la pagina ogni segno
+   * d'interpunzione della prosa veniva composto a quella larghezza — uno spazio
+   * prima di ogni punto, su tutto il sito. La larghezza fissa serve dove un
+   * numero CAMBIA e non deve far ballare ciò che gli sta intorno.
+   */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /**
+   * Newsreader ha l'asse ottico variabile: senza dichiararlo il browser usa la
+   * misura predefinita a QUALSIASI corpo, cioè un disegno da testo ingrandito.
+   */
+  .font-display {
+    font-optical-sizing: auto;
+  }
+
+  /* Stato di focus visibile su tutto ciò che è raggiungibile da tastiera. */
   :focus-visible {
-    @apply outline-none ring-2 ring-sapphire-glow ring-offset-2 ring-offset-bg;
+    @apply outline-none ring-2 ring-accent-glow ring-offset-2 ring-offset-bg;
   }
 
   ::selection {
-    @apply bg-sapphire/40 text-ink;
+    @apply bg-accent/35 text-ink;
   }
 }
 
 @layer components {
-  /* Superfici */
+  /* ── Superfici ──────────────────────────────────────────────────────────── */
+
   .glass-panel {
-    background-color: rgba(11, 15, 25, 0.82);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-color: rgba(30, 41, 59, 0.9);
+    background-color: color-mix(in srgb, theme('colors.bg.elevated') 88%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-color: theme('colors.line.DEFAULT');
   }
 
   .glass-card {
-    background-color: rgba(17, 24, 39, 0.72);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background-color: color-mix(in srgb, theme('colors.surface.DEFAULT') 80%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 
+  /**
+   * Il blocco — non più «la scheda».
+   *
+   * Nella revisione precedente era `bg-surface` con un bordo che compariva al
+   * passaggio del mouse: un rettangolo evidenziato. Qui il fondo è a QUATTRO
+   * MILLESIMI di luminanza dal fondo pagina, quindi il blocco non si annuncia:
+   * si limita a esistere. La risposta al mouse è un impercettibile
+   * schiarimento, non l'accensione di un contorno.
+   *
+   * Nessuna traslazione al passaggio del mouse: sollevare gli oggetti quando ci
+   * passi sopra è un tic, e con dodici blocchi in pagina diventa un campo
+   * minato di cose che si muovono.
+   */
   .card-surface {
-    @apply bg-surface border border-line transition-colors duration-150;
+    @apply bg-surface rounded-lg transition-colors duration-150;
   }
-
   .card-surface:hover {
-    @apply bg-surface-hover border-line-strong;
+    @apply bg-surface-hover;
   }
 
-  /* Bottoni */
+  /* ── Bottoni ────────────────────────────────────────────────────────────── */
+
+  /**
+   * `active:` su ogni pulsante: alla pressione l'elemento cede di un pixel.
+   * È l'unico movimento che risponde al dito invece di annunciarsi da solo.
+   */
   .btn-primary {
-    @apply bg-sapphire text-white font-medium transition-colors duration-150;
+    @apply bg-accent text-white font-medium
+           transition-[background-color,transform] duration-150 active:translate-y-px;
   }
   .btn-primary:hover:not(:disabled) {
-    @apply bg-sapphire-hover;
+    @apply bg-accent-hover;
   }
   .btn-primary:disabled {
-    @apply opacity-40 cursor-not-allowed;
+    @apply opacity-40 cursor-not-allowed active:translate-y-0;
   }
 
+  /**
+   * Il pulsante secondario non ha più un fondo pieno.
+   *
+   * Era `bg-surface` con bordo: un blocco grigio che pesava quanto quello
+   * primario e gli rubava l'occhio. Ora è un contorno sottile su niente — c'è
+   * quando lo cerchi, non prima.
+   */
   .btn-secondary {
-    @apply bg-surface text-ink-muted border border-line transition-colors duration-150;
+    @apply border border-line text-ink-muted font-medium
+           transition-[background-color,border-color,color,transform] duration-150 active:translate-y-px;
   }
   .btn-secondary:hover:not(:disabled) {
-    @apply bg-surface-hover text-ink border-line-strong;
+    @apply border-line-strong text-ink;
   }
   .btn-secondary:disabled {
-    @apply opacity-40 cursor-not-allowed;
+    @apply opacity-40 cursor-not-allowed active:translate-y-0;
   }
 
   .btn-ghost {
@@ -96,60 +142,96 @@
     @apply text-ink bg-surface;
   }
 
+  /* ── Campi ──────────────────────────────────────────────────────────────── */
+
   .input-field {
-    @apply w-full bg-surface-sunken border border-line rounded-xl px-3.5 py-2.5
-           text-sm text-ink placeholder:text-ink-dim outline-none transition-colors;
+    @apply w-full bg-surface-sunken border border-line rounded-md px-3.5 py-2.5
+           text-sm text-ink placeholder:text-ink-dim outline-none
+           transition-[color,background-color,border-color,box-shadow] duration-150;
+  }
+  .input-field:hover:not(:focus):not(:disabled) {
+    @apply border-line-strong;
   }
   .input-field:focus {
-    @apply border-sapphire;
+    @apply border-accent;
+  }
+  /**
+   * L'anello di fuoco del campo lo disegna il campo stesso. La regola globale
+   * `:focus-visible` applica `ring-offset-2`: uno stacco dal colore della
+   * PAGINA, che su un campo dentro un modale disegnava un alone del colore
+   * sbagliato staccato dal bordo. Vince perché @layer components sta sopra
+   * @layer base.
+   */
+  .input-field:focus-visible {
+    @apply ring-2 ring-accent/20 ring-offset-0;
+  }
+  /**
+   * Stato d'errore guidato da `aria-invalid`: l'attributo che l'assistente
+   * vocale legge è lo stesso che colora il bordo, quindi le due segnalazioni
+   * non possono divergere.
+   */
+  .input-field[aria-invalid='true'] {
+    @apply border-danger;
+  }
+  .input-field[aria-invalid='true']:focus-visible {
+    @apply ring-danger/20;
+  }
+  .input-field:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  /* ── Tipografia ─────────────────────────────────────────────────────────── */
+
+  /**
+   * Etichetta di sezione. Prima era scritta a mano ovunque come
+   * `font-mono text-[10px] uppercase tracking-widest text-ink-dim`.
+   */
+  .eyebrow {
+    @apply text-micro font-medium uppercase tracking-[0.11em] text-ink-dim;
+  }
+
+  /** La voce: nomi di personaggi e titoli. Serif, corpo ottico attivo. */
+  .title-serif {
+    @apply font-display font-medium text-ink;
+    font-optical-sizing: auto;
   }
 
   /**
-   * Etichetta di sezione.
+   * Il filo.
    *
-   * Prima ogni occorrenza era scritta a mano come
-   * `font-mono text-[10px] uppercase tracking-widest text-ink-dim`: monospazio
-   * su testo che non e' codice, a 10px, nel grigio piu' debole della tavolozza.
-   * Ora e' una sola dichiarazione, leggibile e ripetuta senza riscriverla.
+   * Sostituisce il bordo chiuso in tutti i punti in cui serviva solo separare
+   * due cose. Un rettangolo intorno a un contenuto dice «questo è un oggetto»;
+   * una riga sotto dice «qui finisce». Quasi sempre la seconda è la verità.
    */
-  .eyebrow {
-    @apply text-micro font-semibold uppercase tracking-[0.09em] text-ink-dim;
+  .rule {
+    @apply border-t border-line;
   }
 
   /**
    * Contenitore che porta lui l'indicatore di focus al posto del figlio.
    *
-   * Il campo di scrittura della chat e' un <textarea> senza bordi dentro un
-   * riquadro arrotondato. La regola globale `:focus-visible` gli disegnava
-   * comunque il proprio anello: siccome il textarea non ha raggio, l'anello
-   * usciva RETTANGOLARE dentro un contenitore arrotondato che nel frattempo si
-   * illuminava anche lui. Due indicatori di focus sovrapposti, uno dei quali
-   * della forma sbagliata. Qui l'anello lo disegna il contenitore, una volta
-   * sola e con il raggio giusto.
+   * Il campo di scrittura della chat è un <textarea> senza bordi dentro un
+   * riquadro arrotondato: la regola globale gli disegnava un anello
+   * RETTANGOLARE dentro un contenitore arrotondato che si illuminava anche lui.
+   * Il bordo a riposo sta QUI e non sull'elemento, perché scritto in linea
+   * vincerebbe su questa regola (le utility stanno in un layer più forte).
    */
-  /* Il bordo a riposo sta QUI e non sull'elemento: scritto in linea come
-     `border-line` vincerebbe sul `border-sapphire` di questa regola, perche'
-     le utility di Tailwind stanno in un layer piu' forte di questo. E' lo
-     stesso motivo per cui `.input-field` dichiara il proprio bordo. */
   .field-shell {
     @apply border border-line transition-colors;
   }
   .field-shell:focus-within {
-    @apply border-sapphire ring-2 ring-sapphire/35;
+    @apply border-accent ring-2 ring-accent/20;
   }
   .field-shell :focus-visible {
     @apply ring-0 ring-offset-0;
   }
 
   /**
-   * Azione che compare al passaggio del mouse — dove un mouse c'e'.
+   * Azione che compare al passaggio del mouse — dove un mouse c'è.
    *
-   * Copia, rigenera, segnala ed elimina erano `opacity-0 group-hover:opacity-100`.
-   * Su un telefono non esiste il passaggio del mouse: quelle quattro azioni
-   * erano invisibili E irraggiungibili, e con loro il menu «elimina
-   * conversazione» nella barra laterale e il pulsante di segnalazione sulle
-   * card. Segnalare un contenuto e' il modo in cui una persona si protegge:
-   * non puo' dipendere dall'avere un mouse.
+   * Su un telefono il passaggio del mouse non esiste: copia, rigenera, segnala
+   * ed elimina erano invisibili E irraggiungibili. Segnalare un contenuto è il
+   * modo in cui una persona si protegge: non può dipendere dall'avere un mouse.
    */
   .hover-action {
     @apply opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100;
@@ -162,7 +244,6 @@
 }
 
 @layer utilities {
-  /* Usata su ogni carosello e mai definita. */
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -170,22 +251,50 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+
+  /** Sfuma il bordo di un elenco che scorre, invece di tagliarlo di netto. */
+  .fade-edge-r {
+    mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent 100%);
+  }
+
+  /**
+   * Trattamento fotografico unico per tutti i ritratti.
+   *
+   * I ritratti arrivano da fonti diverse — foto d'archivio sature, immagini
+   * generate, avatar caricati — e messi uno accanto all'altro in griglia
+   * facevano a pugni: dominanti diverse, contrasti diversi, temperature
+   * diverse. È il motivo per cui la galleria sembrava rumorosa anche a
+   * interfaccia pulita.
+   *
+   * Desaturare e scurire appena li porta tutti nella stessa stanza, come fa
+   * una rivista quando uniforma le immagini di un servizio. Al passaggio del
+   * mouse il colore torna: è la ricompensa per aver guardato.
+   */
+  .portrait {
+    filter: saturate(0.72) brightness(0.92) contrast(1.04);
+    transition: filter 0.3s cubic-bezier(0.2, 0, 0, 1);
+  }
+  .group:hover .portrait {
+    filter: saturate(1) brightness(1) contrast(1);
+  }
 }
 
-/* Scrollbar coerente col tema */
+/* Scrollbar coerente col tema — sui token, non su esadecimali copiati. */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1E293B;
-  border-radius: 8px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #2C3B52;
+  background: theme('colors.line.strong');
+  border-radius: 9999px;
+  /* Il bordo trasparente assottiglia il pollice lasciando l'area di presa
+     intera: si afferra come un oggetto da 10px e si vede come uno da 6px. */
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
 /* Chi ha chiesto meno movimento non deve subirlo. */

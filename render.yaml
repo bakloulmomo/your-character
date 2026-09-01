@@ -31,7 +31,7 @@ services:
         sync: false
       # flash-lite: 1.000 richieste/giorno gratuite contro le 250 di flash.
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash-lite
+        value: gemini-3.5-flash-lite
 
       # Tetto per utente: protegge la quota gratuita, che e' per progetto e non
       # per utente. Con 40 invitati, 25 lascia margine sui 1.000 disponibili.

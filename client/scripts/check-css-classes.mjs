@@ -20,7 +20,9 @@ const CUSTOM_PREFIXES = [
   // Aggiunte con la revisione del design system: se una di queste sparisce
   // dal CSS mentre resta nel codice, il controllo deve accorgersene come per
   // le altre.
-  'eyebrow', 'field-shell', 'hover-action'
+  'eyebrow', 'field-shell', 'hover-action',
+  // Aggiunte con la revisione «Inchiostro».
+  'title-serif', 'fade-edge-r', 'tabular'
 ];
 
 const walk = (dir) =>

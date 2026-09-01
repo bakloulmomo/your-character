@@ -483,7 +483,7 @@ export default function ChatPage() {
           {busy && !streamingText && (
             <div className="flex items-center gap-3" role="status" aria-label={`${displayCharacter.name} sta scrivendo`}>
               <Avatar src={displayCharacter.avatar} name={displayCharacter.name} size={32} />
-              <div className="flex gap-1 rounded-2xl rounded-tl-sm border border-line bg-surface px-4 py-3.5">
+              <div className="flex gap-1 rounded-xl rounded-tl-sm border border-line bg-surface px-4 py-3.5">
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}
@@ -501,7 +501,7 @@ export default function ChatPage() {
       {/* Composizione */}
       <div className="shrink-0 border-t border-line bg-bg-elevated px-4 py-3">
         <div className="mx-auto w-full max-w-3xl">
-          <div className="field-shell flex items-end gap-2 rounded-2xl bg-surface p-2">
+          <div className="field-shell flex items-end gap-2 rounded-xl bg-surface p-2">
             <label htmlFor="composer" className="sr-only">Scrivi un messaggio a {displayCharacter.name}</label>
             <textarea
               id="composer"

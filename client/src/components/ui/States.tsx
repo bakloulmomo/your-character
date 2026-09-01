@@ -6,7 +6,7 @@ export function CardSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="animate-pulse rounded-2xl border border-line bg-surface p-4">
+        <div key={i} className="animate-pulse rounded-xl border border-line bg-surface p-4">
           <div className="mb-3 flex items-center gap-3">
             <div className="h-12 w-12 rounded-xl bg-line" />
             <div className="flex-1 space-y-2">

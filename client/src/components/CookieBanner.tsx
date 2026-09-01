@@ -91,11 +91,11 @@ export default function CookieBanner() {
         role="region"
         aria-label="Informativa cookie"
       >
-        <div ref={panelRef} className="glass-panel animate-slide-up flex items-center gap-3 rounded-2xl border p-3 shadow-2xl">
+        <div ref={panelRef} className="glass-panel animate-slide-up flex items-center gap-3 rounded-xl border p-3 shadow-2xl">
           <Cookie className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
           <p className="flex-1 text-xs leading-relaxed text-ink-muted">
             Usiamo solo cookie tecnici, per tenere aperta la sessione.{' '}
-            <Link to="/privacy" className="text-sapphire-glow underline">Dettagli</Link>
+            <Link to="/privacy" className="text-accent-glow underline">Dettagli</Link>
           </p>
           <button
             onClick={() => decide(false)}
@@ -114,7 +114,7 @@ export default function CookieBanner() {
       role="region"
       aria-label="Informativa cookie"
     >
-      <div ref={panelRef} className="glass-panel animate-slide-up space-y-3 rounded-2xl border p-4 shadow-2xl">
+      <div ref={panelRef} className="glass-panel animate-slide-up space-y-3 rounded-xl border p-4 shadow-2xl">
         <div className="flex items-center gap-2">
           <Cookie className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
           <h2 className="text-sm font-semibold text-ink">Cookie e script di terze parti</h2>
@@ -129,7 +129,7 @@ export default function CookieBanner() {
           <strong className="text-ink"> Stripe</strong>, che rende il checkout più rapido. Se
           rifiuti, viene caricato solo quando apri il modulo di pagamento. Non usiamo cookie
           analitici né pubblicitari.{' '}
-          <Link to="/privacy" className="text-sapphire-glow underline">Informativa completa</Link>
+          <Link to="/privacy" className="text-accent-glow underline">Informativa completa</Link>
         </p>
 
         <div className="flex items-center gap-2">

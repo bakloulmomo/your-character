@@ -74,7 +74,7 @@ export default function FeedbackModal() {
         <form onSubmit={submit} className="space-y-5">
           {wantsMore ? (
             <div className="flex gap-3 rounded-xl border border-line bg-surface p-4">
-              <MessageSquareHeart className="mt-0.5 h-5 w-5 shrink-0 text-sapphire-glow" aria-hidden="true" />
+              <MessageSquareHeart className="mt-0.5 h-5 w-5 shrink-0 text-accent-glow" aria-hidden="true" />
               <div className="space-y-1.5 text-sm leading-relaxed text-ink-muted">
                 <p className="font-medium text-ink">Durante la beta non è ancora possibile ricaricare.</p>
                 <p>

@@ -106,9 +106,22 @@ const DEGRADED_NOTICE = '[Risposta simulata — servizio AI non configurato. Nes
 
 const MAX_TOKENS = 100000;
 const TARGET_OUTPUT_TOKENS = 1000;
-// gemini-1.5-flash is retired (returns 404). Default to a current Flash model,
-// overridable via env so we can track future deprecations without code changes.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+/**
+ * Modello predefinito: un alias MOBILE, non una versione fissata.
+ *
+ * Questo ripiego e' gia' stato sbagliato due volte, sempre allo stesso modo.
+ * Prima era `gemini-1.5-flash`, ritirato; e' diventato `gemini-2.5-flash`, che
+ * al primo utilizzo con una chiave nuova risponde 404 «no longer available to
+ * new users». Un nome di versione fissato dentro il codice ha una scadenza che
+ * nessuno controlla, e scade in silenzio: l'app resta in piedi e smette solo di
+ * rispondere.
+ *
+ * `gemini-flash-lite-latest` e' l'alias che Google fa puntare al modello Flash
+ * Lite corrente: non puo' essere ritirato sotto i piedi. Chi vuole una versione
+ * esatta la fissa in `GEMINI_MODEL`, che e' il posto giusto per una decisione
+ * che dipende dall'ambiente e non dal codice.
+ */
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
 
 /**
  * Estimates token count based on string length (~4 chars per token)

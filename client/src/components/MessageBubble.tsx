@@ -48,24 +48,61 @@ export default function MessageBubble({
 
   return (
     <div className={`group flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      {!isUser && !isSafety && <Avatar src={character.avatar} name={character.name} size={32} className="mt-0.5" />}
+      {!isUser && !isSafety && (
+        <Avatar src={character.avatar} name={character.name} size={30} rounded="md" className="portrait mt-1" />
+      )}
       {!isUser && isSafety && (
         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-warning/40 bg-warning/10">
           <LifeBuoy className="h-4 w-4 text-warning" aria-hidden="true" />
         </span>
       )}
 
-      <div className={`flex min-w-0 max-w-[85%] flex-col gap-1 md:max-w-[75%] ${isUser ? 'items-end' : 'items-start'}`}>
+      {/**
+        * Misure diverse per i due ruoli.
+        *
+        * Il turno del personaggio è prosa da leggere: gli si dà una GIUSTEZZA,
+        * cioè una larghezza di riga misurata in caratteri e non in percentuale
+        * della finestra. `65ch` è l'intervallo in cui l'occhio ritrova l'inizio
+        * della riga successiva senza cercarlo — la regola tipografica di
+        * sempre. Con `max-w-[75%]` su uno schermo largo le righe arrivavano a
+        * centoventi caratteri, e si perde il segno.
+        *
+        * Il turno dell'utente resta stretto: è una battuta, non un brano.
+        */}
+      <div className={`flex min-w-0 flex-col gap-1.5 ${isUser ? 'max-w-[80%] items-end md:max-w-[60%]' : 'max-w-[65ch] items-start'}`}>
+        {/**
+          * IL TURNO DEL PERSONAGGIO NON È UNA BOLLA.
+          *
+          * È la decisione che porta più lontano da un'interfaccia di chat
+          * qualunque, ed è la più giustificata dal prodotto: qui si legge un
+          * personaggio che parla, non si consultano notifiche. Un romanzo non
+          * mette il dialogo dentro dei riquadri colorati.
+          *
+          * Quindi: nessun fondo, nessun contorno, nessun angolo arrotondato.
+          * Solo testo — serif, 16px, interlinea 1.7 — appoggiato alla pagina.
+          * Prima era un rettangolo grigio con testo a 15px, cioè la stessa
+          * forma con cui l'interfaccia disegna un pannello di impostazioni.
+          *
+          * Il turno dell'UTENTE conserva un contenitore, perché lì il riquadro
+          * fa un lavoro vero: separa ciò che hai scritto da ciò che stai
+          * leggendo. Ma non è più azzurro pieno. In una conversazione di
+          * quaranta turni erano venti blocchi di accento, e il colore che
+          * l'interfaccia riserva alle AZIONI finiva addosso a ogni frase.
+          *
+          * Restano colorati solo gli stati che portano un significato:
+          * l'errore e l'avviso di sicurezza. È l'unico posto in cui il colore
+          * dice qualcosa che il testo da solo non direbbe.
+          */}
         <div
-          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+          className={
             isUser
-              ? 'rounded-tr-sm bg-sapphire text-white'
+              ? 'rounded-lg rounded-tr-sm bg-surface px-4 py-2.5 text-base text-ink-muted'
               : isError
-                ? 'rounded-tl-sm border border-danger/40 bg-danger/10 text-danger'
+                ? 'border-l-2 border-danger py-1 pl-4 text-base text-danger'
                 : isSafety
-                  ? 'rounded-tl-sm border border-warning/40 bg-warning/10 text-ink'
-                  : 'rounded-tl-sm border border-line bg-surface text-ink'
-          }`}
+                  ? 'border-l-2 border-warning py-1 pl-4 text-base text-ink'
+                  : 'font-display text-read text-ink'
+          }
         >
           {isError && (
             <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold">
@@ -94,7 +131,7 @@ export default function MessageBubble({
           <p className="whitespace-pre-wrap break-words">
             {parseMessage(message.content).map((part, i) =>
               part.italic ? (
-                <em key={i} className={isUser ? 'text-white/80' : 'text-ink-muted'}>{part.text}</em>
+                <em key={i} className={isUser ? 'text-ink-dim' : 'text-ink-muted'}>{part.text}</em>
               ) : (
                 <span key={i}>{part.text}</span>
               )
@@ -105,7 +142,7 @@ export default function MessageBubble({
           </p>
 
           {message.image && (
-            <figure className="mt-3 overflow-hidden rounded-xl border border-line">
+            <figure className="mt-3 overflow-hidden rounded-lg">
               <img src={message.image.url} alt={message.image.prompt} className="max-h-96 w-full object-cover" loading="lazy" />
               <figcaption className="bg-bg px-3 py-2 text-micro text-ink-dim">
                 {message.image.prompt}
@@ -115,7 +152,7 @@ export default function MessageBubble({
         </div>
 
         <div className={`flex items-center gap-0.5 ${isUser ? 'flex-row-reverse' : ''}`}>
-          <time className="px-1 text-micro text-ink-dim" dateTime={message.createdAt}>
+          <time className="tabular px-1 text-micro text-ink-dim" dateTime={message.createdAt}>
             {new Date(message.createdAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
           </time>
 

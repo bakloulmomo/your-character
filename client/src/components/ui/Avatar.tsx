@@ -6,7 +6,7 @@ interface Props {
   name: string;
   size?: number;
   className?: string;
-  rounded?: 'full' | 'xl' | '2xl';
+  rounded?: 'full' | 'md' | 'lg' | 'xl' | '2xl';
   /**
    * Riempie il contenitore invece di stare su un lato fisso.
    *
@@ -28,15 +28,14 @@ export default function Avatar({
   src, name, size = 40, className = '', rounded = 'xl', fill = false
 }: Props) {
   const [failed, setFailed] = useState(false);
-  const radius = fill
-    ? ''
-    : rounded === 'full' ? 'rounded-full' : rounded === '2xl' ? 'rounded-2xl' : 'rounded-xl';
+  const RADIUS = { full: 'rounded-full', md: 'rounded-md', lg: 'rounded-lg', xl: 'rounded-xl', '2xl': 'rounded-xl' } as const;
+  const radius = fill ? '' : RADIUS[rounded];
   const box = fill ? { width: '100%', height: '100%' } : { width: size, height: size };
 
   if (!src || failed) {
     return (
       <div
-        className={`${radius} flex shrink-0 items-center justify-center font-semibold text-white ${className}`}
+        className={`${radius} font-display flex shrink-0 items-center justify-center font-medium text-white/90 ${className}`}
         style={{
           ...box,
           backgroundColor: tintFor(name),
@@ -57,7 +56,7 @@ export default function Avatar({
       height={size}
       loading="lazy"
       onError={() => setFailed(true)}
-      className={`${radius} shrink-0 object-cover ${fill ? '' : 'border border-line'} ${className}`}
+      className={`${radius} shrink-0 object-cover ${className}`}
       style={box}
     />
   );

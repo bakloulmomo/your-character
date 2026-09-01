@@ -21,14 +21,50 @@ export default function SearchPage() {
 
   useDocumentTitle(debounced ? `Cerca «${debounced}»` : 'Cerca');
 
-  // L'indirizzo resta la fonte di verità: il termine è condivisibile.
+  /**
+   * L'indirizzo resta la fonte di verità: il termine è condivisibile.
+   *
+   * ─── La corsa che c'era qui ───
+   *
+   * Questo effetto riscriveva la query dopo 300 ms. Chi cercava e apriva un
+   * risultato PRIMA che il timer scattasse si ritrovava sulla scheda del
+   * personaggio con la ricerca appiccicata in coda:
+   *
+   *     /character/650000000000000000000002?q=marc
+   *
+   * Il timer era già in coda nel momento del click: scattava dopo che il
+   * router aveva cambiato pagina, e `setParams` scrive sempre sull'indirizzo
+   * CORRENTE — che a quel punto non era più quello della ricerca. Un indirizzo
+   * sporco è condivisibile quanto uno pulito, quindi il difetto si propagava a
+   * ogni link copiato.
+   *
+   * Due guardie, e servono entrambe:
+   *
+   *  1. NON SI SCRIVE SE NON CAMBIA NULLA. Arrivando da `/search?q=marc` il
+   *     termine è già nell'indirizzo: la riscrittura era pura cerimonia, e
+   *     toglierla elimina il caso più frequente alla radice.
+   *
+   *  2. NON SI SCRIVE DOPO LO SMONTAGGIO. Copre il caso in cui il termine è
+   *     davvero cambiato (si è digitato ancora, poi si è cliccato in fretta):
+   *     lì la prima guardia non basta, perché una scrittura ci sarebbe.
+   */
+  const currentQuery = params.get('q') ?? '';
+
   useEffect(() => {
+    let alive = true;
     const timer = setTimeout(() => {
-      setDebounced(term.trim());
-      setParams(term.trim() ? { q: term.trim() } : {}, { replace: true });
+      if (!alive) return;
+      const next = term.trim();
+      setDebounced(next);
+      if (next !== currentQuery) {
+        setParams(next ? { q: next } : {}, { replace: true });
+      }
     }, 300);
-    return () => clearTimeout(timer);
-  }, [term, setParams]);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [term, currentQuery, setParams]);
 
   const { characters, status, total, reload } = useCharacters({
     search: debounced,

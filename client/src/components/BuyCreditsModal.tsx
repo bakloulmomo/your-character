@@ -310,7 +310,7 @@ export default function BuyCreditsModal() {
                     <ul className="space-y-1 mb-3">
                       {s.perks.map((p) => (
                         <li key={p} className="text-xs text-ink-muted flex items-center gap-1.5">
-                          <Check className="w-3 h-3 text-sapphire-glow shrink-0" />{p}
+                          <Check className="w-3 h-3 text-accent-glow shrink-0" />{p}
                         </li>
                       ))}
                     </ul>
@@ -370,7 +370,7 @@ export default function BuyCreditsModal() {
                 aria-checked={isSelected}
                 onClick={() => setSelectedPack(pkg.id)}
                 className={`flex flex-col justify-between rounded-xl border bg-surface p-4 text-left transition-colors ${
-                  isSelected ? 'border-sapphire' : 'border-line hover:border-line-strong'
+                  isSelected ? 'border-accent' : 'border-line hover:border-line-strong'
                 }`}
               >
                 <span>
@@ -387,7 +387,7 @@ export default function BuyCreditsModal() {
                     sistema, con testo bianco sopra. */}
                 <span className={`mt-3 flex w-full items-center justify-center gap-1 rounded-lg border py-1.5 text-xs font-medium ${
                   isSelected
-                    ? 'border-sapphire bg-sapphire text-white'
+                    ? 'border-accent bg-accent text-white'
                     : 'border-line bg-surface text-ink-muted'
                 }`}>
                   {isSelected && <Check className="h-3 w-3" aria-hidden="true" />}

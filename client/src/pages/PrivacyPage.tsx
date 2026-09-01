@@ -83,7 +83,7 @@ function Section({ title, icon: Icon, children }: { title: string; icon?: typeof
   return (
     <section>
       <h2 className="mb-3 flex items-center gap-2 font-display text-xl font-bold text-ink">
-        {Icon && <Icon className="h-5 w-5 text-sapphire-glow" aria-hidden="true" />} {title}
+        {Icon && <Icon className="h-5 w-5 text-accent-glow" aria-hidden="true" />} {title}
       </h2>
       <div className="space-y-4 leading-relaxed text-ink-muted">{children}</div>
     </section>
@@ -112,7 +112,7 @@ export default function PrivacyPage() {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-12">
-        <div className="glass-card space-y-8 rounded-2xl border border-line p-8">
+        <div className="glass-card space-y-8 rounded-xl border border-line p-8">
           <section>
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
               <ShieldCheck className="h-4 w-4" /> Regolamento (UE) 2016/679
@@ -158,7 +158,7 @@ export default function PrivacyPage() {
             </div>
             <p className="text-sm">
               L’autenticazione avviene con email e password e una sessione firmata (JWT) conservata in un
-              cookie <code className="font-mono text-sapphire-glow">yc_token</code> di tipo HttpOnly.
+              cookie <code className="font-mono text-accent-glow">yc_token</code> di tipo HttpOnly.
             </p>
           </Section>
 
@@ -221,12 +221,12 @@ export default function PrivacyPage() {
           <Section title="5. I tuoi diritti">
             <p>
               Puoi esercitare i diritti previsti dagli articoli 15-22 del GDPR direttamente dalle{' '}
-              <Link to="/settings" className="text-sapphire-glow underline">impostazioni del tuo account</Link>,
+              <Link to="/settings" className="text-accent-glow underline">impostazioni del tuo account</Link>,
               senza scrivere a nessuno e senza attese.
             </p>
             <div className="space-y-4">
-              <div className="flex items-start gap-4 rounded-xl border border-sapphire/30 bg-sapphire-wash p-4">
-                <Download className="mt-1 h-6 w-6 shrink-0 text-sapphire-glow" />
+              <div className="flex items-start gap-4 rounded-xl border border-accent/30 bg-accent-wash p-4">
+                <Download className="mt-1 h-6 w-6 shrink-0 text-accent-glow" />
                 <div>
                   <h3 className="text-sm font-semibold text-ink">Accesso e portabilità (artt. 15 e 20)</h3>
                   <p className="mt-1 text-xs text-ink-muted">
@@ -256,11 +256,11 @@ export default function PrivacyPage() {
 
           <Section title="6. Cookie">
             <p className="text-sm">
-              Usiamo un solo cookie tecnico, <code className="font-mono text-sapphire-glow">yc_token</code>,
+              Usiamo un solo cookie tecnico, <code className="font-mono text-accent-glow">yc_token</code>,
               per mantenere la sessione: è necessario al funzionamento e non richiede consenso. Non
               utilizziamo cookie analitici né pubblicitari. L’unica scelta facoltativa riguarda il
               caricamento anticipato dello script di pagamento di Stripe, ed è revocabile in qualsiasi
-              momento dalle <Link to="/settings" className="text-sapphire-glow underline">impostazioni</Link>.
+              momento dalle <Link to="/settings" className="text-accent-glow underline">impostazioni</Link>.
             </p>
           </Section>
 
@@ -280,7 +280,7 @@ export default function PrivacyPage() {
           <Section title="8. Contatti">
             <p className="text-sm">
               Per esercitare i tuoi diritti o chiedere chiarimenti:{' '}
-              <a href="mailto:privacy@your-character.app" className="text-sapphire-glow hover:underline">
+              <a href="mailto:privacy@your-character.app" className="text-accent-glow hover:underline">
                 privacy@your-character.app
               </a>. Rispondiamo entro un mese, come previsto dall’art. 12.
             </p>

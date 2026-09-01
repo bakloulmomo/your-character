@@ -46,7 +46,7 @@ function Card({ title, icon: Icon, description, children, tone = 'normal' }: {
   tone?: 'normal' | 'danger';
 }) {
   return (
-    <section className={`mb-6 rounded-2xl border p-5 ${tone === 'danger' ? 'border-danger/30 bg-danger/5' : 'border-line bg-surface'}`}>
+    <section className={`mb-6 rounded-xl border p-5 ${tone === 'danger' ? 'border-danger/30 bg-danger/5' : 'border-line bg-surface'}`}>
       <h2 className={`mb-1 flex items-center gap-2 font-display text-base font-semibold ${tone === 'danger' ? 'text-danger' : 'text-ink'}`}>
         <Icon className="h-4 w-4" aria-hidden="true" /> {title}
       </h2>
@@ -198,7 +198,7 @@ export default function SettingsPage() {
               aria-pressed={functional === option.value}
               className={`rounded-xl border px-4 py-2 text-sm transition-colors ${
                 functional === option.value
-                  ? 'border-sapphire bg-sapphire-wash text-sapphire-glow'
+                  ? 'border-accent bg-accent-wash text-accent-glow'
                   : 'border-line bg-bg text-ink-muted hover:border-line-strong'
               }`}
             >
@@ -242,7 +242,7 @@ export default function SettingsPage() {
                 savePreference('nsfw', { nsfwEnabled: !(user.nsfwEnabled === true) }, () => {})
               }
               className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-                user.nsfwEnabled === true ? 'bg-sapphire' : 'bg-surface-hover border border-line'
+                user.nsfwEnabled === true ? 'bg-accent' : 'bg-surface-hover border border-line'
               }`}
             >
               {/* `left-0` non e' decorativo: senza, un elemento in posizione

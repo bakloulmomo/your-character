@@ -161,7 +161,7 @@ export default function ModerationPage() {
       onClick={() => setTab(id)}
       aria-pressed={tab === id}
       className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition-colors ${
-        tab === id ? 'border-sapphire bg-sapphire-wash text-sapphire-glow' : 'border-line bg-surface text-ink-muted hover:border-line-strong'
+        tab === id ? 'border-accent bg-accent-wash text-accent-glow' : 'border-line bg-surface text-ink-muted hover:border-line-strong'
       }`}
     >
       {label}
@@ -172,7 +172,7 @@ export default function ModerationPage() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 md:px-8">
       <h1 className="mb-1 flex items-center gap-2 font-display text-2xl font-bold text-ink">
-        <ShieldCheck className="h-5 w-5 text-sapphire-glow" aria-hidden="true" /> Moderazione
+        <ShieldCheck className="h-5 w-5 text-accent-glow" aria-hidden="true" /> Moderazione
       </h1>
       <p className="mb-6 text-sm text-ink-muted">
         Personaggi in attesa di revisione e segnalazioni aperte, dalla più grave alla più recente.
@@ -189,7 +189,7 @@ export default function ModerationPage() {
         ) : (
           <ul className="space-y-4">
             {characters.map((c) => (
-              <li key={c._id} className="rounded-2xl border border-line bg-surface p-5">
+              <li key={c._id} className="rounded-xl border border-line bg-surface p-5">
                 <div className="flex items-start gap-4">
                   <Avatar src={c.avatar} name={c.name} size={56} />
                   <div className="min-w-0 flex-1">
@@ -208,7 +208,7 @@ export default function ModerationPage() {
                     {/* È il testo che decide il comportamento del personaggio:
                         è esattamente ciò che va letto prima di approvare. */}
                     <details className="mt-3">
-                      <summary className="cursor-pointer text-xs text-sapphire-glow">Istruzioni del personaggio</summary>
+                      <summary className="cursor-pointer text-xs text-accent-glow">Istruzioni del personaggio</summary>
                       <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-bg p-3 font-mono text-xs text-ink-muted">
                         {c.systemPrompt || c.personality}
                       </pre>
@@ -245,7 +245,7 @@ export default function ModerationPage() {
         ) : (
           <ul className="space-y-4">
             {reports.map((r) => (
-              <li key={r._id} className="rounded-2xl border border-line bg-surface p-5">
+              <li key={r._id} className="rounded-xl border border-line bg-surface p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-micro font-medium ${
                     r.source === 'automatic'
@@ -268,7 +268,7 @@ export default function ModerationPage() {
                   {r.targetType === 'character' ? 'Personaggio' : r.targetType === 'message' ? 'Messaggio' : 'Utente'}
                   {r.targetOwnerId?.username ? ` · di @${r.targetOwnerId.username}` : ''}
                   {r.targetType === 'character' && (
-                    <Link to={`/character/${r.targetId}`} className="ml-2 inline-flex items-center gap-1 text-sapphire-glow">
+                    <Link to={`/character/${r.targetId}`} className="ml-2 inline-flex items-center gap-1 text-accent-glow">
                       apri <ExternalLink className="h-3 w-3" aria-hidden="true" />
                     </Link>
                   )}

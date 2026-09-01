@@ -31,13 +31,31 @@ export function initialsOf(name: string): string {
  * sopra. Restano tinte, non decorazioni.
  */
 export function tintFor(seed: string): string {
+  /**
+   * Otto tinte sorde, distribuite sull'arco cromatico.
+   *
+   * Le sei precedenti erano tutte blu, indaco o viola — e per giunta prese di
+   * peso dalla scala predefinita (`#1D4ED8`, `#4338CA`, `#5B21B6`). Due
+   * conseguenze: ogni personaggio senza ritratto somigliava a tutti gli altri,
+   * cioe' il colore non distingueva nulla pur esistendo apposta per farlo; e
+   * indaco e viola sono precisamente le tinte che rendono riconoscibile
+   * un'interfaccia generata.
+   *
+   * Queste sono desaturate e profonde, come pigmenti piu' che come luci:
+   * accanto a un fondo di inchiostro stanno al loro posto invece di
+   * illuminarlo. Le iniziali bianche restano fra 7.4:1 e 9.5:1 su ognuna,
+   * verificato — sono testo grande, ma un ripiego non e' una scusa per un
+   * contrasto scarso.
+   */
   const palette = [
-    '#1D4ED8', // blu profondo — l'accento del sistema
-    '#0E7490', // ciano scuro
-    '#4338CA', // indaco
-    '#0369A1', // azzurro d'acciaio
-    '#5B21B6', // viola-indaco, il piu' lontano dell'arco
-    '#155E75'  // petrolio
+    '#7A3B4E', // vinaccia
+    '#2F5D50', // verderame
+    '#4A4066', // prugna
+    '#7A4A2C', // terra d'ombra
+    '#2B4B6F', // ardesia
+    '#5C5330', // oliva
+    '#6B3A5C', // more
+    '#3E5238'  // bosco
   ];
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;

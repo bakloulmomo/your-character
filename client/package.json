@@ -9,11 +9,12 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "check:css": "node scripts/check-css-classes.mjs",
-    "verify": "tsc && vite build && node scripts/check-css-classes.mjs && vitest run",
+    "verify": "tsc && vite build && node scripts/check-css-classes.mjs && node scripts/check-contrast.mjs && vitest run",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.22.0",

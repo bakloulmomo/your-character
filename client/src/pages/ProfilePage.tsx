@@ -46,7 +46,7 @@ export default function ProfilePage() {
 
       {/* Riepilogo del piano */}
       <div className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-line bg-surface p-4">
+        <div className="rounded-xl border border-line bg-surface p-4">
           <p className="eyebrow">Crediti</p>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{user.credits}</p>
           {/* Un bersaglio da 60x16 px non si centra con un dito. Il testo resta
@@ -54,7 +54,7 @@ export default function ProfilePage() {
           {features.payments ? (
             <button
               onClick={() => setBuyCreditsModalOpen(true)}
-              className="-ml-2 mt-1 flex min-h-[36px] items-center gap-1.5 rounded-lg px-2 text-xs text-sapphire-glow transition-colors hover:bg-sapphire-wash"
+              className="-ml-2 mt-1 flex min-h-[36px] items-center gap-1.5 rounded-lg px-2 text-xs text-accent-glow transition-colors hover:bg-accent-wash"
             >
               <Coins className="h-3.5 w-3.5" aria-hidden="true" /> Ricarica
             </button>
@@ -63,7 +63,7 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-line bg-surface p-4">
+        <div className="rounded-xl border border-line bg-surface p-4">
           <p className="eyebrow">Piano</p>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{planLabel}</p>
           {user.subscription !== 'free' && user.subscriptionExpiresAt && (
@@ -73,7 +73,7 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-line bg-surface p-4">
+        <div className="rounded-xl border border-line bg-surface p-4">
           <p className="eyebrow">Uso di oggi</p>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{user.dailyMessageCount}</p>
           <p className="mt-2 text-xs text-ink-dim">messaggi inviati</p>
