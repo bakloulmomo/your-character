@@ -97,6 +97,7 @@ test('percorso completo: dalla registrazione all\'eliminazione dell\'account', a
     await sendMessage(page, `Messaggio numero ${i}`);
     await page.waitForTimeout(250);
   }
+  
   await expect(buyDialog).toBeVisible();
   await expect(sidebar(page).getByText('0 crediti')).toBeVisible();
 
@@ -127,6 +128,9 @@ test('percorso completo: dalla registrazione all\'eliminazione dell\'account', a
   await page.goto('/settings');
   await page.getByRole('button', { name: /Elimina account/ }).click();
   await page.getByLabel('Nome utente per conferma').fill(username);
+  // Il nome utente è scritto nella pagina: da solo protegge dalla disattenzione,
+  // non da chi ha rubato la sessione. Il server chiede anche la password (S14).
+  await page.getByLabel('La tua password').fill('Password1');
   await page.getByRole('button', { name: 'Elimina definitivamente' }).click();
 
   // ── 12. La sessione è chiusa davvero (S0-8) ───────────────────────────────

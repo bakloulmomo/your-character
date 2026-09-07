@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { sendMessageSchema } = require('../utils/validation');
+const { sendMessageSchema, isValidObjectId } = require('../utils/validation');
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
 const Character = require('../models/Character');
@@ -164,6 +164,21 @@ router.post('/', requireAuth, messageLimiter, validate(sendMessageSchema), async
       });
     }
 
+    /**
+     * Il taglio per sicurezza si registra, non si nasconde.
+     *
+     * L'utente riceve la parte già generata e non vede alcun errore — è la
+     * scelta giusta per lui — ma un personaggio che porta il modello al limite
+     * a ogni turno è un'informazione che deve arrivare a chi modera, non
+     * sparire nel silenzio di una degradazione riuscita.
+     */
+    if (aiResult.truncatedBySafety) {
+      req.log.warn(
+        { chatId, characterId: String(character._id), reason: aiResult.truncatedBySafety, lunghezza: aiResult.content.length },
+        'Risposta troncata dai filtri del modello: consegnata la parte già generata'
+      );
+    }
+
     recordCall('llm', { ok: true, costEur: aiResult.cost });
 
     // 8. Moderazione dell'OUTPUT: ciò che il modello ha prodotto viene guardato
@@ -308,15 +323,53 @@ router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema),
     let streamedUnsafe = false;
     let buffer = '';
 
+    /**
+     * Moderazione dello streaming a FINESTRA, non sul buffer intero (S9).
+     *
+     * Prima ogni frammento faceva `moderateText(buffer)` sul buffer CRESCENTE.
+     * `moderateText` normalizza fino a ottomila caratteri e poi applica circa
+     * duecentocinquanta espressioni regolari con quantificatori e classi
+     * `[\W_]{0,2}` per ciascun carattere del termine. Una risposta da mille
+     * token arriva in due-trecento frammenti, quindi si parlava di decine di
+     * migliaia di esecuzioni di quelle regex su stringhe che crescono fino a
+     * quattromila caratteri — tutto sull'event loop, che è uno solo.
+     *
+     * Su un dyno gratuito da un decimo di CPU bastavano poche conversazioni
+     * simultanee per bloccarlo, e quando l'event loop è bloccato non risponde
+     * NIENTE: né il login, né il webhook di Stripe. Il limite di venti messaggi
+     * al minuto per utente non protegge, perché il costo non sta nel numero di
+     * richieste ma nella durata di ognuna.
+     *
+     * Basta guardare la CODA. Un termine vietato è lungo al massimo qualche
+     * decina di caratteri anche scritto con separatori: una finestra di
+     * cinquecento caratteri lo contiene sempre per intero, e la sovrapposizione
+     * fra una finestra e la successiva impedisce che un termine a cavallo di
+     * due frammenti sfugga. Il controllo completo sul testo intero resta
+     * comunque, una volta sola, alla fine — è `screenAiOutput` più sotto, che è
+     * quello che decide davvero.
+     */
+    const FINESTRA = 500;
+    /** Ogni quanti caratteri nuovi vale la pena riesaminare la coda. */
+    const PASSO = 120;
+    let esaminatiFinoA = 0;
+
     let aiResult;
     try {
       aiResult = await generateResponseStream(context, character.name, (delta) => {
         if (streamedUnsafe) return;
         buffer += delta;
-        if (moderateText(buffer).severity === 'block') {
-          streamedUnsafe = true;
-          send({ moderated: true });
-          return;
+
+        // Si riesamina ogni PASSO caratteri nuovi, e sempre al primo
+        // frammento — così una risposta breve e vietata viene fermata prima di
+        // arrivare a schermo, non solo dal controllo finale.
+        if (esaminatiFinoA === 0 || buffer.length - esaminatiFinoA >= PASSO) {
+          const coda = buffer.slice(Math.max(0, buffer.length - FINESTRA));
+          esaminatiFinoA = buffer.length;
+          if (moderateText(coda).severity === 'block') {
+            streamedUnsafe = true;
+            send({ moderated: true });
+            return;
+          }
         }
         send({ delta });
       });
@@ -559,6 +612,10 @@ router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
  */
 router.delete('/item/:messageId', requireAuth, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.messageId)) {
+      return res.status(400).json({ error: 'Identificativo non valido' });
+    }
+
     const message = await Message.findById(req.params.messageId);
     if (!message) return res.status(404).json({ error: 'Messaggio non trovato' });
 
@@ -566,9 +623,59 @@ router.delete('/item/:messageId', requireAuth, async (req, res) => {
     if (!chat) return res.status(404).json({ error: 'Messaggio non trovato' });
 
     await Message.findByIdAndDelete(message._id);
-    await Chat.findByIdAndUpdate(chat._id, { $inc: { messageCount: -1 } });
 
-    res.json({ success: true });
+    /**
+     * Eliminare un messaggio deve toglierlo dalla CONVERSAZIONE, non solo dalla
+     * vista.
+     *
+     * Prima qui c'era una riga sola: `$inc: { messageCount: -1 }`. Il messaggio
+     * spariva dallo schermo e dalla collezione, e tutto il resto restava
+     * indietro:
+     *
+     *  · `conversationSummary` continuava a contenerlo. È il riassunto che
+     *    viene reinserito nel contesto di OGNI turno successivo: il personaggio
+     *    seguitava a ricordare — e a citare — una cosa che l'utente aveva
+     *    cancellato. Per una conversazione privata questa non è un'imprecisione,
+     *    è il contrario di quello che la cancellazione promette.
+     *  · `lastMessageAt` restava all'istante del messaggio eliminato, quindi la
+     *    cronologia nella barra laterale continuava a ordinare la conversazione
+     *    come se l'ultimo scambio fosse ancora lì.
+     *  · `messageCount` si limitava a scendere di uno, e da un valore già
+     *    disallineato poteva finire sotto zero senza che nulla lo fermasse.
+     *
+     * I due contatori si RICALCOLANO dai messaggi rimasti invece di essere
+     * corretti a incrementi: la collezione è la fonte di verità, e ricalcolare
+     * costa una query indicizzata.
+     */
+    const [rimasti, ultimo] = await Promise.all([
+      Message.countDocuments({ chatId: chat._id }),
+      Message.findOne({ chatId: chat._id }).sort({ createdAt: -1, _id: -1 }).select('createdAt').lean()
+    ]);
+
+    /**
+     * Il riassunto viene azzerato, non riscritto.
+     *
+     * Riscriverlo vorrebbe dire una chiamata al modello a ogni eliminazione:
+     * lenta, a pagamento, e su un contenuto che l'utente ha appena chiesto di
+     * far sparire. Azzerandolo la memoria lunga si ricostruisce da sola al
+     * prossimo superamento della soglia, a partire dai soli messaggi rimasti —
+     * costa un po' di contesto sulle conversazioni molto lunghe, e in cambio la
+     * cancellazione è vera.
+     */
+    await Chat.findByIdAndUpdate(chat._id, {
+      messageCount: rimasti,
+      lastMessageAt: ultimo ? ultimo.createdAt : chat.createdAt,
+      conversationSummary: ''
+    });
+
+    res.json({
+      success: true,
+      chat: {
+        _id: chat._id,
+        messageCount: rimasti,
+        lastMessageAt: ultimo ? ultimo.createdAt : chat.createdAt
+      }
+    });
   } catch (error) {
     serverFailure(req, res, error, 'Impossibile eliminare il messaggio');
   }
@@ -587,6 +694,10 @@ router.delete('/item/:messageId', requireAuth, async (req, res) => {
 router.get('/:chatId', requireAuth, async (req, res) => {
   try {
     const { chatId } = req.params;
+    if (!isValidObjectId(chatId)) {
+      return res.status(400).json({ error: 'Identificativo non valido' });
+    }
+
     const { before } = req.query;
     const limit = Math.min(parseInt(req.query.limit) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 

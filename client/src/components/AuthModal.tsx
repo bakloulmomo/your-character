@@ -78,7 +78,7 @@ function Field({ id, label, hint, error, action, children }: FieldProps) {
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-[0.8125rem] font-semibold leading-none tracking-[-0.006em] text-ink">
+        <label htmlFor={id} className="text-sm font-semibold leading-none text-ink">
           {label}
         </label>
         {action}
@@ -129,6 +129,15 @@ function Select({ label, value, onChange, invalid, children }: SelectProps) {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Chi nasce dopo questo istante non ha ancora diciotto anni. Catturato una
+ * volta sola, fuori dal render: una costante, non una lettura dell'orologio.
+ */
+const MAGGIORE_ETA = (() => {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear() - 18, d.getUTCMonth(), d.getUTCDate());
+})();
 
 export default function AuthModal() {
   const { isAuthModalOpen, authModalMode, setAuthModalOpen, setUser, setToken, notify, inviteRequired } = useStore();
@@ -213,8 +222,16 @@ export default function AuthModal() {
     return new Date(Date.UTC(Number(year), Number(month), Number(day)));
   }, [day, month, year]);
 
-  const age = birthdate ? (Date.now() - birthdate.getTime()) / (365.25 * 24 * 3600 * 1000) : null;
-  const underage = age !== null && age < 18;
+  /**
+   * Maggiore età, calcolata su un istante catturato all'import del modulo.
+   *
+   * Era `Date.now()` letto durante il render, e `react-hooks/purity` lo
+   * segnalava — a ragione: un render che legge l'orologio non è riproducibile,
+   * e con il compilatore di React può essere memoizzato con un valore vecchio.
+   * L'ora esatta qui non serve a nulla: la soglia è una data di diciotto anni
+   * fa, e non si sposta mentre qualcuno compila un modulo.
+   */
+  const underage = birthdate !== null && birthdate.getTime() > MAGGIORE_ETA;
 
   const emailError = touched.email && email !== '' && !emailValid ? 'Indirizzo email non valido.' : '';
   const usernameError =
@@ -423,7 +440,7 @@ export default function AuthModal() {
       {error && (
         <div
           role="alert"
-          className="animate-shake mb-5 flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger/[0.09] px-4 py-3 text-[0.8125rem] font-medium leading-relaxed text-danger"
+          className="animate-shake mb-5 flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger/[0.09] px-4 py-3 text-sm font-medium leading-relaxed text-danger"
         >
           <AlertCircle className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
           {error}
@@ -503,8 +520,7 @@ export default function AuthModal() {
           >
             <span
               aria-hidden="true"
-              className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-xl bg-accent
-                          shadow-[0_2px_12px_-2px_rgba(37,99,235,0.55)]
+              className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded bg-accent
                           transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
                           ${view === 'register' ? 'translate-x-full' : 'translate-x-0'}`}
             />
@@ -671,7 +687,7 @@ export default function AuthModal() {
                   </div>
 
                   <fieldset>
-                    <legend className="mb-2 text-[0.8125rem] font-semibold leading-none tracking-[-0.006em] text-ink">
+                    <legend className="mb-2 text-sm font-semibold leading-none text-ink">
                       Data di nascita
                     </legend>
                     <p className="mb-3 text-xs font-normal leading-relaxed text-ink-dim">

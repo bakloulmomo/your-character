@@ -71,15 +71,19 @@ app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Clerk Middleware (Safely handle mock/test environments)
-if (process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_PUBLISHABLE_KEY.startsWith('pk_test_c')) {
-  try {
-    const { clerkMiddleware } = require('@clerk/express');
-    app.use(clerkMiddleware());
-  } catch (e) {
-    console.warn('Clerk middleware fallback mode active');
-  }
-}
+/**
+ * Il middleware Clerk NON viene più montato (S2).
+ *
+ * La condizione era `CLERK_PUBLISHABLE_KEY.startsWith('pk_test_c')`: una chiave
+ * di TEST accendeva un percorso di autenticazione anche in produzione, che è la
+ * direzione di fallimento sbagliata — la stessa scelta altrove nel progetto va
+ * nel verso opposto (`isProduction()` in config/env.js tratta come produzione
+ * qualunque ambiente non dichiarato).
+ *
+ * Il ramo che ne dipendeva, in `middleware/auth.js`, creava account con i
+ * crediti di benvenuto scavalcando il codice d'invito della beta chiusa. Clerk
+ * era già stato abbandonato dappertutto: restava solo quel pezzo.
+ */
 
 /**
  * Logging strutturato con identificativo di richiesta (FASE E).

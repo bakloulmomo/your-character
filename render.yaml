@@ -56,7 +56,9 @@ services:
       - key: BETA_INVITE_CODE
         sync: false
 
-      # ── Primo moderatore ────────────────────────────────────────────────
+      # ── Recapito staff ──────────────────────────────────────────────────
+      # NON concede alcun ruolo: è solo il destinatario di ripiego delle
+      # notifiche. Per diventare amministratore vedi scripts/grantRole.js.
       - key: ADMIN_EMAILS
         sync: false
 

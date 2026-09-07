@@ -7,8 +7,13 @@
  *
  * Esiste perché la coda di revisione è protetta da un ruolo, e un ruolo deve
  * poter essere concesso e tolto da chi amministra il servizio senza toccare il
- * database a mano. La partenza a freddo (il primissimo amministratore) si
- * risolve invece con la variabile ADMIN_EMAILS.
+ * database a mano.
+ *
+ * È anche l'UNICA via: la promozione automatica via ADMIN_EMAILS è stata
+ * rimossa perché nessuna email è verificata. Per il primissimo amministratore,
+ * dopo esserti registrato normalmente dall'interfaccia:
+ *
+ *   MONGODB_URI="<uri di produzione>" node scripts/grantRole.js me@example.com admin
  */
 const mongoose = require('mongoose');
 require('dotenv').config();

@@ -59,7 +59,7 @@ export default function DiscoverPage() {
         * cosa fare, e il saluto, che resta piccolo perché è una cortesia.
         */}
       <header className="mb-12">
-        <h1 className="title-serif text-display-lg">Scegli con chi parlare</h1>
+        <h1 className="title-display text-display-lg">Scegli con chi parlare</h1>
         {user && (
           <p className="mt-3 text-sm text-ink-dim">Bentornato, @{user.username}</p>
         )}
@@ -125,7 +125,7 @@ export default function DiscoverPage() {
         <>
           <section className="mb-14">
             <div className="rule mb-7 flex items-baseline justify-between gap-4 pt-5">
-              <h2 className="title-serif text-display-sm">{heading}</h2>
+              <h2 className="title-display text-display-sm">{heading}</h2>
               <span className="tabular text-micro text-ink-dim">
                 {featured.characters.length}
               </span>
@@ -153,11 +153,11 @@ export default function DiscoverPage() {
                 <div className="mb-3.5 flex aspect-[4/5] items-center justify-center rounded-lg
                                 border border-dashed border-line transition-colors
                                 group-hover:border-line-strong">
-                  <span className="text-2xl font-light text-ink-dim transition-colors group-hover:text-ink-muted">
+                  <span className="text-display-sm font-light text-ink-dim transition-colors group-hover:text-ink-muted">
                     +
                   </span>
                 </div>
-                <h3 className="title-serif text-display-sm text-ink-muted transition-colors group-hover:text-ink">
+                <h3 className="title-display text-display-sm text-ink-muted transition-colors group-hover:text-ink">
                   Crea il tuo
                 </h3>
               </Link>

@@ -15,6 +15,8 @@
  *   3.0:1  testo grande (≥18.66px grassetto o ≥24px) e componenti dell'interfaccia
  */
 
+import { readFileSync } from 'node:fs';
+
 const hex = (h) => {
   const s = h.replace('#', '');
   const n = s.length === 3 ? s.split('').map((c) => c + c).join('') : s;
@@ -36,26 +38,61 @@ const ratio = (a, b) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
-// ── La tavolozza, nella stessa forma in cui sta in tailwind.config.js ────────
+// ── La tavolozza — LETTA dalla configurazione, non ricopiata ────────────────
+/**
+ * Prima queste diciotto righe erano una trascrizione a mano di
+ * `tailwind.config.js`, e nulla teneva insieme le due copie. Un controllo che
+ * misura valori diversi da quelli che il browser dipinge non misura niente: la
+ * prima modifica al tema che dimenticasse questo file avrebbe lasciato lo
+ * script verde su una tavolozza che non esiste piu'.
+ *
+ * Ora la fonte e' una sola. Se un token sparisce, `richiesto()` lo dice
+ * fallendo subito, invece di lasciare `undefined` scorrere fino a un NaN.
+ */
+import config from '../tailwind.config.js';
+
+const COLORI = config.theme.extend.colors;
+
+const richiesto = (percorso) => {
+  const valore = percorso.split('.').reduce((o, k) => (o == null ? o : o[k]), COLORI);
+  if (typeof valore !== 'string' || !valore.startsWith('#')) {
+    console.error(
+      `\n❌ Token assente o non esadecimale in tailwind.config.js: colors.${percorso}\n` +
+      `   (letto: ${JSON.stringify(valore)})\n`
+    );
+    process.exit(1);
+  }
+  return valore;
+};
+
 export const PALETTE = {
-  bg: '#0A0A0C',
-  bgElevated: '#0F0F12',
-  surface: '#141417',
-  surfaceHover: '#1A1A1E',
-  surfaceSunken: '#0C0C0E',
-  line: '#1F1F24',
-  lineStrong: '#34343C',
-  ink: '#EDEDF0',
-  inkMuted: '#A2A2AC',
-  inkDim: '#87878F',
-  accent: '#1A6FBE',
-  accentHover: '#1F76C4',
-  accentGlow: '#63B3F0',
-  accentDeep: '#124C82',
-  onAccent: '#FFFFFF',
-  danger: '#F2555A',
-  success: '#2FBF87',
-  warning: '#E0A33E'
+  bg: richiesto('bg.DEFAULT'),
+  bgElevated: richiesto('bg.elevated'),
+  surface: richiesto('surface.DEFAULT'),
+  surfaceHover: richiesto('surface.hover'),
+  surfaceSunken: richiesto('surface.sunken'),
+  line: richiesto('line.DEFAULT'),
+  lineStrong: richiesto('line.strong'),
+  ink: richiesto('ink.DEFAULT'),
+  inkMuted: richiesto('ink.muted'),
+  inkDim: richiesto('ink.dim'),
+  accent: richiesto('accent.DEFAULT'),
+  accentHover: richiesto('accent.hover'),
+  accentGlow: richiesto('accent.glow'),
+  danger: richiesto('danger'),
+  success: richiesto('success'),
+  warning: richiesto('warning'),
+  /**
+   * Il colore del TESTO sul riempimento d'accento.
+   *
+   * Sull'ambra era il nero della sala (7.54:1), perché col bianco quella
+   * coppia dava 2.42:1. Con l'accento tornato al blu del marchio la misura si
+   * ribalta: il nero dà 3.93:1 e non passa, l'inchiostro 4.64:1 sì. Il
+   * pulsante primario porta quindi testo chiaro — è la stessa riga di
+   * `index.css` che lo dice (`btn-primary { @apply text-ink }`), e la coppia
+   * qui sotto è ciò che impedisce alle due di divergere.
+   */
+  onAccent: richiesto('ink.DEFAULT')
 };
 
 const P = PALETTE;
@@ -85,9 +122,9 @@ const PAIRS = [
   ['ink-dim su superficie', P.inkDim, P.surface, 4.5],
   ['ink-dim su campo', P.inkDim, P.surfaceSunken, 4.5],
 
-  // Azione principale: testo bianco sul riempimento pieno
-  ['bianco su accento', P.onAccent, P.accent, 4.5],
-  ['bianco su accento (hover)', P.onAccent, P.accentHover, 4.5],
+  // Azione principale: il testo del pulsante sul riempimento pieno
+  ['testo su accento', P.onAccent, P.accent, 4.5],
+  ['testo su accento (hover)', P.onAccent, P.accentHover, 4.5],
 
   // Collegamenti e testo d'accento sui fondi scuri
   ['accento-glow su bg', P.accentGlow, P.bg, 4.5],
@@ -103,12 +140,57 @@ const PAIRS = [
   ['warning su bg', P.warning, P.bg, 4.5],
   ['warning su superficie', P.warning, P.surface, 4.5],
 
-  // Elementi non testuali: soglia 3:1
-  ['bordo forte su bg', P.lineStrong, P.bg, 1.5],
+  // Elementi non testuali: soglia 3:1 (WCAG 1.4.11)
+  //
+  // `line` e `line.strong` NON sono qui, e la ragione va scritta perche' la
+  // versione precedente li teneva dentro con la soglia abbassata a 1.5 — un
+  // numero senza fondamento, scelto per far passare un colore che a 3.0 non
+  // passava. Abbassare la soglia non e' verificare: e' spegnere il controllo
+  // lasciandone acceso l'aspetto.
+  //
+  // La risposta onesta e' che quei due token fanno DUE mestieri diversi, e solo
+  // uno ricade sotto WCAG 1.4.11. Separare un blocco dal successivo e'
+  // decorazione: se il filo sparisse, il contenuto resterebbe comprensibile.
+  // Disegnare il bordo di un campo o di un pulsante non lo e': li' la linea e'
+  // l'unica cosa che dice dove si puo' scrivere o premere.
+  //
+  // Il secondo mestiere ha quindi un token suo, `line.control`, che la soglia
+  // la rispetta davvero.
+  ['bordo di controllo su bg', richiesto('line.control'), P.bg, 3.0],
+  ['bordo di controllo su campo', richiesto('line.control'), P.surfaceSunken, 3.0],
   ['accento (bordo di campo) su campo', P.accent, P.surfaceSunken, 3.0],
   ['anello di fuoco su bg', P.accentGlow, P.bg, 3.0],
   ['anello di fuoco su pannello', P.accentGlow, P.bgElevated, 3.0]
 ];
+
+/**
+ * Le tinte di ripiego degli avatar — LETTE da `src/lib/format.ts`.
+ *
+ * Erano l'ultimo colore dell'interfaccia fuori da questo controllo: il fondo
+ * dell'avatar senza immagine è calcolato in JavaScript da `tintFor()`, quindi
+ * non passa da Tailwind e nessuna delle 27 coppie lo toccava. Sono otto colori
+ * che portano del testo, e il testo su un colore non verificato è testo non
+ * verificato — «è solo un ripiego» non è una ragione per un contrasto scarso,
+ * ed è anzi il caso in cui capita più spesso.
+ *
+ * Si estraggono dal sorgente invece di ricopiarle qui: la trascrizione a mano
+ * è l'errore che questo stesso file aveva con la tavolozza.
+ */
+const sorgenteTinte = readFileSync(new URL('../src/lib/format.ts', import.meta.url), 'utf8');
+const blocco = sorgenteTinte.match(/const palette = \[([\s\S]*?)\]/);
+if (!blocco) {
+  console.error('\n❌ Non trovo `const palette = [...]` in src/lib/format.ts.\n');
+  process.exit(1);
+}
+const TINTE = [...blocco[1].matchAll(/'(#[0-9A-Fa-f]{6})'/g)].map((m) => m[1]);
+if (TINTE.length === 0) {
+  console.error('\n❌ La tavolozza degli avatar in src/lib/format.ts è vuota.\n');
+  process.exit(1);
+}
+// Le iniziali sono testo grande (≥ 36% del lato), quindi la soglia è 3.0.
+for (const tinta of TINTE) {
+  PAIRS.push([`iniziali su avatar ${tinta}`, P.ink, tinta, 3.0]);
+}
 
 let failed = 0;
 const rows = PAIRS.map(([name, fg, bg, min]) => {

@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { createChatSchema } = require('../utils/validation');
+const { createChatSchema, isValidObjectId } = require('../utils/validation');
+const { isOwner, isCharacterVisible } = require('../utils/visibility');
 const Chat = require('../models/Chat');
 const Character = require('../models/Character');
 const Message = require('../models/Message');
@@ -16,20 +17,26 @@ router.post('/', requireAuth, validate(createChatSchema), async (req, res) => {
 
     const character = await Character.findById(characterId);
 
-    // Un personaggio privato è utilizzabile solo dal suo creatore. Senza questo
-    // controllo bastava conoscere un id per conversare con il personaggio
-    // privato di chiunque — 404 anche qui, per non rivelarne l'esistenza.
-    // Alla stessa regola si aggiunge la revisione: un personaggio pubblico che
-    // non l'ha superata non è chattabile da terzi, altrimenti la coda di
-    // moderazione varrebbe solo per la vetrina e non per l'uso (S2-2).
-    const isOwner = character && character.createdBy.toString() === userId.toString();
-    const isVisible = character && (isOwner || (character.isPublic && character.moderationStatus === 'approved'));
-    if (!isVisible) {
+    /**
+     * La stessa regola della galleria e della scheda, non una sua copia.
+     *
+     * Qui la condizione era riscritta a mano e pretendeva ancora
+     * `moderationStatus === 'approved'`. Con il passaggio alla moderazione
+     * successiva le altre due copie sono state aggiornate e questa no, e il
+     * risultato era un difetto che dall'interfaccia non somigliava affatto alla
+     * sua causa: il personaggio compariva in galleria, si apriva, mostrava il
+     * pulsante «Nuova conversazione» — e il pulsante rispondeva 404.
+     *
+     * 404 e non 403, come altrove: un personaggio privato non deve rivelare
+     * nemmeno di esistere.
+     */
+    const proprietario = isOwner(character, req.user);
+    if (!isCharacterVisible(character, req.user)) {
       return res.status(404).json({ error: 'Character non trovato' });
     }
 
     // Contenuti per adulti: stessa condizione della galleria (S2-3).
-    if (character.isNSFW && !isOwner && !req.user.canSeeNSFW()) {
+    if (character.isNSFW && !proprietario && !req.user.canSeeNSFW()) {
       return res.status(403).json({
         error: 'Questo personaggio contiene contenuti per adulti. Per parlarci devi essere maggiorenne e attivare la relativa preferenza nelle impostazioni.',
         requiresAgeVerification: true
@@ -97,6 +104,10 @@ router.get('/', requireAuth, async (req, res) => {
 // GET /api/chats/:id - Get specific chat details
 router.get('/:id', requireAuth, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identificativo non valido' });
+    }
+
     const chat = await Chat.findOne({ _id: req.params.id, userId: req.user._id })
       .populate('characterId')
       .lean();
@@ -114,6 +125,10 @@ router.get('/:id', requireAuth, async (req, res) => {
 // DELETE /api/chats/:id - Delete a chat session and associated session context
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identificativo non valido' });
+    }
+
     const chatId = req.params.id;
     const userId = req.user._id;
 

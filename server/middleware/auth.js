@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const { getAuth } = require('@clerk/express');
 const User = require('../models/User');
 const { jwtSecret, isTest, welcomeCredits } = require('../config/env');
 const { applyBanExpiry } = require('../utils/time');
@@ -45,29 +44,33 @@ const resolveUser = async (req) => {
     }
   }
 
-  // 2. Contesto Clerk, quando presente
-  let clerkId = null;
-  try {
-    const auth = getAuth(req);
-    if (auth && auth.userId) clerkId = auth.userId;
-  } catch (e) {
-    // Contesto Clerk non disponibile.
-  }
-
-  if (clerkId) {
-    let user = await User.findOne({ clerkId });
-    if (user) await applyBanExpiry(user);
-    if (!user) {
-      user = await User.create({
-        clerkId,
-        authProvider: 'clerk',
-        email: `${clerkId}@user.your-character.app`,
-        username: `user_${clerkId.slice(-6)}`,
-        credits: welcomeCredits()
-      });
-    }
-    return user;
-  }
+  /**
+   * 2. Il secondo percorso di autenticazione — RIMOSSO (S2).
+   *
+   * Qui c'era un ramo Clerk che, trovando un `userId` senza un account
+   * corrispondente, ne CREAVA uno con i crediti di benvenuto:
+   *
+   *     user = await User.create({ clerkId, ..., credits: welcomeCredits() });
+   *
+   * Non passava da `/register`, quindi non incontrava né il codice d'invito
+   * della beta chiusa, né `registerLimiter`, né la data di nascita. Il
+   * middleware si montava se `CLERK_PUBLISHABLE_KEY` iniziava per `pk_test_c`
+   * — condizione vera anche con `NODE_ENV=production`, cioè esattamente la
+   * configurazione plausibile di una beta. E un'istanza di sviluppo Clerk
+   * accetta registrazioni da chiunque: N identità là fuori diventavano N
+   * account qui, ognuno con cento crediti a carico della quota Gemini
+   * condivisa, che è per progetto e non per utente.
+   *
+   * Non è stato irrigidito ma eliminato, perché Clerk era già stato
+   * abbandonato ovunque: `@clerk/clerk-react` non aveva un solo import nel
+   * client, l'informativa privacy dichiara che si usa un JWT proprio, e nessun
+   * test copriva questo ramo. Restava solo il pezzo che creava account.
+   *
+   * Due meccanismi di identità sullo stesso modello `User`, con regole
+   * d'ingresso diverse, sono un difetto anche quando entrambi funzionano: la
+   * più permessiva è quella che conta, ed è quella che nessuno guarda.
+   *
+   */
 
   // 3. Header di mock — SOLO in ambiente di test.
   // Non deve mai essere attivo altrove: permetterebbe di impersonare

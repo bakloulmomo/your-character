@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { z } = require('zod');
 
 // Character Validation Schemas
@@ -44,7 +45,27 @@ const generateImageSchema = z.object({
   prompt: z.string().min(3, 'Il prompt deve contenere almeno 3 caratteri').max(1000)
 });
 
+/**
+ * Un identificativo che Mongoose può convertire senza lanciare (S11).
+ *
+ * Vive qui perché era già scritto DUE volte, identico, in `routes/characters.js`
+ * e `routes/admin.js` — e mancava nelle sei rotte che ne avevano bisogno:
+ * `PUT`/`DELETE` di un personaggio, `GET`/`DELETE` di una conversazione e due
+ * punti dei messaggi. Là un identificativo malformato arrivava a Mongoose, che
+ * sollevava `CastError`, che diventava un 500 con lo stack in Sentry — mentre
+ * la risposta giusta è 400 o 404. Costo zero per chi lo provoca, rumore per chi
+ * guarda il monitoraggio, e la semantica sbagliata per chi ha solo sbagliato a
+ * incollare un indirizzo.
+ *
+ * Il doppio controllo non è ridondante: `ObjectId.isValid` accetta anche
+ * qualunque stringa di 12 caratteri, quindi da solo lascerebbe passare
+ * `'personaggio1'`.
+ */
+const isValidObjectId = (id) =>
+  typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id) && mongoose.Types.ObjectId.isValid(id);
+
 module.exports = {
+  isValidObjectId,
   createCharacterSchema,
   sendMessageSchema,
   createChatSchema,

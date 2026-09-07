@@ -33,7 +33,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       <div role="alert" className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-6 text-center">
         <AlertTriangle className="h-8 w-8 text-danger" aria-hidden="true" />
         <div>
-          <h1 className="font-display text-lg font-semibold text-ink">Qualcosa si è rotto in questa pagina</h1>
+          <h1 className="title-display text-display-sm">Qualcosa si è rotto in questa pagina</h1>
           <p className="mt-1 text-sm text-ink-muted">
             L'errore è stato registrato. Le tue conversazioni sono al sicuro.
           </p>

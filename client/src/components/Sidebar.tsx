@@ -17,7 +17,7 @@ export default function Sidebar() {
   const {
     user, logout, isSidebarCollapsed, toggleSidebar,
     isMobileSidebarOpen, setMobileSidebarOpen,
-    setAuthModalOpen, setBuyCreditsModalOpen, features, setFeedbackModalOpen
+    setAuthModalOpen, setBuyCreditsModalOpen, features, setFeedbackModalOpen, askConfirm
   } = useStore();
 
   const { chats, status, deleteChat } = useChats();
@@ -87,7 +87,7 @@ export default function Sidebar() {
       {/* Velo sotto la barra su mobile */}
       {isMobileSidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          className="scrim fixed inset-0 z-30 md:hidden"
           onClick={() => setMobileSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -232,7 +232,7 @@ export default function Sidebar() {
                         >
                           <Avatar src={chat.character?.avatar} name={chat.character?.name ?? chat.title} size={28} />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[0.8125rem] font-medium text-ink">
+                            <span className="block truncate text-sm font-medium text-ink">
                               {chat.character?.name ?? chat.title}
                             </span>
                             <span className="block truncate text-micro text-ink-dim">
@@ -261,6 +261,16 @@ export default function Sidebar() {
                             <button
                               onClick={async () => {
                                 setMenuOpenFor(null);
+                                // Il menu si apre da un'icona di tre puntini
+                                // larga ventotto pixel, e questa voce cancella
+                                // una conversazione intera con tutti i suoi
+                                // messaggi. Prima non chiedeva niente.
+                                const conferma = await askConfirm({
+                                  title: `Sei sicuro di voler eliminare la conversazione con ${chat.character?.name ?? chat.title}?`,
+                                  description: 'Tutti i messaggi scambiati vengono eliminati. L\'operazione non è reversibile.'
+                                });
+                                if (!conferma) return;
+
                                 const removed = await deleteChat(chat._id);
                                 if (removed && openChatId === chat._id) navigate('/');
                               }}
@@ -340,7 +350,7 @@ export default function Sidebar() {
                 <Avatar src={user.avatar} name={user.username} size={28} rounded="full" />
                 {!collapsed && (
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[0.8125rem] font-medium text-ink">@{user.username}</span>
+                    <span className="block truncate text-sm font-medium text-ink">@{user.username}</span>
                     <span className="tabular block text-micro text-ink-dim">{user.credits} crediti</span>
                   </span>
                 )}
@@ -366,7 +376,25 @@ export default function Sidebar() {
                   <div className="my-1 border-t border-line" />
                   <button
                     role="menuitem"
-                    onClick={async () => { setAccountMenuOpen(false); await logout(); navigate('/'); }}
+                    onClick={async () => {
+                      setAccountMenuOpen(false);
+                      /**
+                       * Non distrugge nulla, quindi non è rossa: `destructive:
+                       * false`. Il rosso deve restare il colore di ciò che non
+                       * si recupera, altrimenti smette di significarlo.
+                       */
+                      const conferma = await askConfirm({
+                        title: 'Vuoi disconnetterti?',
+                        description: 'Le tue conversazioni restano al loro posto: le ritrovi al prossimo accesso.',
+                        confirmLabel: 'Disconnetti',
+                        cancelLabel: 'Resta connesso',
+                        destructive: false
+                      });
+                      if (!conferma) return;
+
+                      await logout();
+                      navigate('/');
+                    }}
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger/10"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" /> Disconnetti

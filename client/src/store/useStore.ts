@@ -197,10 +197,54 @@ interface AppState {
   setBuyCreditsModalOpen: (open: boolean) => void;
   setReportModalOpen: (open: boolean, target?: { type: 'character' | 'message' | 'user'; id: string } | null) => void;
 
+  /**
+   * Conferma prima di un'azione irreversibile.
+   *
+   * Sta nello store, e non come stato locale di ogni pagina, perché la stessa
+   * domanda serve in sei punti diversi — messaggio, conversazione, personaggio,
+   * account, disconnessione, rimozione da moderatore. Sei copie della stessa
+   * finestra sono sei occasioni di scriverla in modo leggermente diverso, ed è
+   * esattamente così che nascono le interfacce in cui il pulsante pericoloso è
+   * a destra in una schermata e a sinistra in un'altra.
+   *
+   * `askConfirm` restituisce una promessa: chi chiama scrive una riga sola e
+   * legge la risposta dove gli serve, senza montare nulla.
+   *
+   *     if (!(await askConfirm({ title: 'Sei sicuro di voler eliminare…' }))) return;
+   */
+  confirmRequest: ConfirmRequest | null;
+  askConfirm: (request: ConfirmOptions) => Promise<boolean>;
+  resolveConfirm: (accepted: boolean) => void;
+
   // Notifiche
   toasts: Toast[];
   notify: (message: string, kind?: ToastKind) => void;
   dismissToast: (id: string) => void;
+}
+
+/**
+ * Una richiesta di conferma. `resolve` viene aggiunto dallo store: chi chiama
+ * non lo passa, aspetta la promessa.
+ */
+export interface ConfirmOptions {
+  /** La domanda. Per convenzione: «Sei sicuro di voler eliminare X?» */
+  title: string;
+  /** Che cosa succede davvero, se non è ovvio dal titolo. */
+  description?: string;
+  /** Il pulsante rosso, a destra. */
+  confirmLabel?: string;
+  /** Il pulsante di rinuncia, a sinistra. */
+  cancelLabel?: string;
+  /**
+   * `false` per una conferma che non distrugge nulla — la disconnessione, per
+   * esempio: interrompe qualcosa, ma non cancella niente, e dipingerla di rosso
+   * come l'eliminazione di un account svaluta il rosso dove serve davvero.
+   */
+  destructive?: boolean;
+}
+
+interface ConfirmRequest extends ConfirmOptions {
+  resolve: (accepted: boolean) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -288,6 +332,26 @@ export const useStore = create<AppState>((set, get) => ({
   isBuyCreditsModalOpen: false,
   isReportModalOpen: false,
   reportTarget: null,
+
+  confirmRequest: null,
+  askConfirm: (request) =>
+    new Promise<boolean>((resolve) => {
+      /**
+       * Se una conferma è già aperta, la precedente viene chiusa con un rifiuto
+       * invece di restare appesa. Una promessa che non si risolve mai è un
+       * `await` che non torna: la funzione che lo attendeva resterebbe ferma
+       * per sempre, con il suo stato «in corso» acceso.
+       */
+      const inCorso = get().confirmRequest;
+      if (inCorso) inCorso.resolve(false);
+      set({ confirmRequest: { ...request, resolve } });
+    }),
+  resolveConfirm: (accepted) => {
+    const request = get().confirmRequest;
+    if (!request) return;
+    set({ confirmRequest: null });
+    request.resolve(accepted);
+  },
   setBuyCreditsModalOpen: (isBuyCreditsModalOpen) => set({ isBuyCreditsModalOpen }),
   setReportModalOpen: (isReportModalOpen, reportTarget = null) =>
     set({ isReportModalOpen, reportTarget }),

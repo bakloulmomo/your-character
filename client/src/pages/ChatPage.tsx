@@ -17,7 +17,7 @@ const MAX_LENGTH = 4000;
 export default function ChatPage() {
   const { chatId } = useParams();
   const navigate = useNavigate();
-  const { user, updateCredits, setBuyCreditsModalOpen, setReportModalOpen, notify, features, setFeedbackModalOpen, token } = useStore();
+  const { user, updateCredits, setBuyCreditsModalOpen, setReportModalOpen, notify, features, setFeedbackModalOpen, token, askConfirm } = useStore();
   const { reload: reloadChats } = useChats();
   const { messages, status, hasMore, loadingOlder, loadOlder, setMessages, reload } = useMessages(chatId);
 
@@ -180,14 +180,35 @@ export default function ChatPage() {
       // localStorage — li' non c'e' piu' nulla da quando la sessione vive nel
       // cookie httpOnly, e questa riga leggeva sempre null. Funzionava solo
       // perche' il cookie viaggia da se', il che rendeva il difetto invisibile.
+      /**
+       * `credentials` e `signal`, entrambi espliciti.
+       *
+       * `credentials: 'same-origin'` e' gia' il valore predefinito di `fetch`,
+       * ma dichiararlo dice che il cookie di sessione DEVE viaggiare: e' la
+       * cosa da cui dipende tutta questa chiamata, e lasciarla implicita
+       * significa che una futura modifica dell'origine la romperebbe in
+       * silenzio.
+       *
+       * `signal` e' la vera aggiunta: senza, una risposta che non arriva mai —
+       * il backend sul piano gratuito impiega una cinquantina di secondi a
+       * risvegliarsi — lascia lo streaming appeso a tempo indeterminato, e
+       * l'unico modo di uscirne e' ricaricare la pagina. Novanta secondi sono
+       * piu' generosi del timeout di axios perche' qui la risposta arriva a
+       * frammenti e la durata totale e' legittimamente maggiore.
+       */
+      const controller = new AbortController();
+      const scadenza = setTimeout(() => controller.abort(), 90000);
+
       const response = await fetch('/api/messages/stream', {
         method: 'POST',
+        credentials: 'same-origin',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ chatId, content: text })
-      });
+      }).finally(() => clearTimeout(scadenza));
 
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => ({}));
@@ -321,6 +342,21 @@ export default function ChatPage() {
   };
 
   const removeMessage = async (messageId: string) => {
+    /**
+     * L'eliminazione di un messaggio avveniva al primo click.
+     *
+     * «Elimina messaggio» è una delle quattro icone che compaiono al passaggio
+     * del mouse sopra ogni turno, accanto a «copia» e «rigenera», e su telefono
+     * sono sempre visibili e distanti pochi millimetri l'una dall'altra. Un
+     * turno di conversazione non si recupera.
+     */
+    const conferma = await askConfirm({
+      title: 'Sei sicuro di voler eliminare questo messaggio?',
+      description:
+        'Sparisce dalla conversazione e dalla memoria del personaggio: da qui in avanti non lo ricorderà più.'
+    });
+    if (!conferma) return;
+
     try {
       await api.delete(`/messages/item/${messageId}`);
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
@@ -483,7 +519,16 @@ export default function ChatPage() {
           {busy && !streamingText && (
             <div className="flex items-center gap-3" role="status" aria-label={`${displayCharacter.name} sta scrivendo`}>
               <Avatar src={displayCharacter.avatar} name={displayCharacter.name} size={32} />
-              <div className="flex gap-1 rounded-xl rounded-tl-sm border border-line bg-surface px-4 py-3.5">
+              {/* Nessuna bolla.
+
+                  Era l'ultima rimasta: `MessageBubble` ha eliminato il
+                  contenitore attorno al turno del personaggio — niente fondo,
+                  niente bordo, solo prosa — ma l'attesa di quel turno era
+                  ancora un rettangolo bordato. Quindi per due secondi compariva
+                  una forma, e al suo posto arrivava del testo nudo: l'unico
+                  punto della conversazione in cui l'interfaccia si contraddiceva
+                  da sola, ed è anche quello che l'utente guarda fisso. */}
+              <div className="flex gap-1 py-2">
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}

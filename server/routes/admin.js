@@ -6,8 +6,10 @@
  * personaggi si pubblicavano da soli. Un catalogo di violazioni che nessuno
  * può vedere non è moderazione, è archiviazione.
  *
- * Tutto è dietro `requireRole`: il primo moderatore nasce da ADMIN_EMAILS o da
- * `scripts/grantRole.js`.
+ * Tutto è dietro `requireRole`, e il ruolo si concede solo fuori banda con
+ * `scripts/grantRole.js`. La promozione automatica via ADMIN_EMAILS è stata
+ * rimossa: senza verifica dell'indirizzo, regalava questo pannello a chiunque
+ * conoscesse l'email del titolare (vedi `routes/auth.js`).
  */
 const express = require('express');
 const router = express.Router();
@@ -33,7 +35,11 @@ router.get('/overview', staffOnly, async (req, res) => {
     const [pendingReports, automaticReports, pendingCharacters, bannedUsers] = await Promise.all([
       Report.countDocuments({ status: 'pending' }),
       Report.countDocuments({ status: 'pending', source: 'automatic' }),
-      Character.countDocuments({ moderationStatus: 'pending', isPublic: true }),
+      // Il lavoro in coda è ciò che è PUBBLICATO e non ancora esaminato: da
+      // quando la moderazione è successiva, `moderationStatus` dice se un
+      // personaggio è visibile, non se qualcuno l'ha guardato — quello lo dice
+      // `moderatedAt`.
+      Character.countDocuments({ isPublic: true, moderatedAt: null }),
       User.countDocuments({ isBanned: true })
     ]);
 
@@ -93,7 +99,19 @@ router.get('/metrics', staffOnly, async (req, res) => {
 // GET /api/admin/reports?status=pending&source=&limit=&page=
 router.get('/reports', staffOnly, async (req, res) => {
   try {
-    const { status = 'pending', source, targetType } = req.query;
+    /**
+     * `String()` prima del filtro, come nella galleria pubblica (S5).
+     *
+     * Con `extended: true`, `?source[$ne]=x` arriva come oggetto e finisce in
+     * `filter` come operatore Mongo. Qui chi chiama è già staff, quindi non
+     * c'è escalation — ma un moderatore che vede risultati diversi da quelli
+     * che ha chiesto è comunque un difetto, e la coda di moderazione è il posto
+     * in cui contano.
+     */
+    const testo = (v) => (v === undefined || v === null ? '' : String(v));
+    const status = req.query.status === undefined ? 'pending' : testo(req.query.status);
+    const source = testo(req.query.source);
+    const targetType = testo(req.query.targetType);
     const limit = clampLimit(req.query.limit);
     const page = Math.max(parseInt(req.query.page) || 1, 1);
 
@@ -181,15 +199,45 @@ router.patch('/reports/:id', staffOnly, async (req, res) => {
   }
 });
 
-// GET /api/admin/characters?status=pending - Coda di revisione dei personaggi
+/**
+ * GET /api/admin/characters?status=da_rivedere — Coda di revisione.
+ *
+ * La coda ha cambiato significato insieme alla visibilità dei personaggi. Non
+ * elenca più ciò che ASPETTA di essere pubblicato — la moderazione preventiva
+ * teneva invisibile ogni personaggio pubblico finché qualcuno non lo guardava,
+ * e su un'istanza senza moderatori quel qualcuno non esisteva. Elenca ciò che è
+ * GIÀ pubblicato e nessuno ha ancora guardato.
+ *
+ * Il discriminante è `moderatedAt`, non `moderationStatus`: il primo dice se
+ * una persona ha deciso, il secondo se il personaggio è visibile. Erano la
+ * stessa cosa finché la revisione veniva prima; ora sono due domande diverse.
+ *
+ * `pending` resta accettato come sinonimo di `da_rivedere`: è ciò che chiedeva
+ * l'interfaccia precedente, e una coda che risponde vuota a una richiesta
+ * scritta con la parola vecchia è peggio di un nome poco elegante.
+ */
 router.get('/characters', staffOnly, async (req, res) => {
   try {
-    const { status = 'pending' } = req.query;
+    const status = req.query.status === undefined ? 'da_rivedere' : String(req.query.status);
     const limit = clampLimit(req.query.limit, 25);
     const page = Math.max(parseInt(req.query.page) || 1, 1);
 
-    const filter = { isPublic: true };
-    if (status && status !== 'all') filter.moderationStatus = status;
+    const CODE = {
+      // Pubblicati e mai esaminati da una persona. Include i personaggi rimasti
+      // `pending` da prima del passaggio alla moderazione successiva.
+      da_rivedere: { moderatedAt: null },
+      pending: { moderatedAt: null },
+      // Esaminati e lasciati online.
+      approved: { moderationStatus: 'approved', moderatedAt: { $ne: null } },
+      // Rimossi dalla galleria.
+      rejected: { moderationStatus: 'rejected' },
+      all: {}
+    };
+
+    const filter = {
+      isPublic: true,
+      ...(Object.prototype.hasOwnProperty.call(CODE, status) ? CODE[status] : CODE.da_rivedere)
+    };
 
     const [characters, total] = await Promise.all([
       // Qui `systemPrompt` viene incluso di proposito: è il testo che decide il

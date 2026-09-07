@@ -1,0 +1,37 @@
+# Aggiornamenti automatici delle dipendenze.
+#
+# Non c'era nulla: le vulnerabilità arrivavano solo se qualcuno lanciava
+# `npm audit` a mano, e il gate in CI era a soglia `high` — quindi le medie
+# passavano. Abbassando la soglia a `moderate` ne sono uscite subito tre reali
+# (`qs`, DoS e aggiramento del limite sugli array), presenti da tempo.
+#
+# Settimanale e non giornaliero: su un progetto con due `package.json` una PR
+# al giorno diventa rumore, e il rumore si ignora.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Le patch di sicurezza da sole, così si distinguono a colpo d'occhio
+      # dagli aggiornamenti di comodo e si possono unire senza pensarci troppo.
+      sviluppo:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /client
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      sviluppo:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

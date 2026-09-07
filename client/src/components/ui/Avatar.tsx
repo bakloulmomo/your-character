@@ -24,18 +24,32 @@ interface Props {
  * Prima un URL rotto lasciava l'icona di immagine spezzata del browser: ogni
  * card della galleria dipendeva da immagini Unsplash esterne.
  */
+/**
+ * Il ritratto è rettangolare, e non è un dettaglio.
+ *
+ * Il ripiego predefinito era `rounded-xl` e le pagine chiedevano `rounded="full"`
+ * quasi ovunque. Un cerchio intorno a un volto è il segnale più riconoscibile
+ * di «applicazione qualsiasi»: lo fanno tutti, quindi non dice niente. Un
+ * ritaglio rettangolare è un fotogramma, ed è ciò che un prodotto costruito
+ * attorno a dei personaggi dovrebbe sembrare. `rounded="full"` resta
+ * disponibile — l'avatar dell'utente nella barra laterale è una persona reale,
+ * non un personaggio — ma smette di essere il caso normale.
+ */
 export default function Avatar({
-  src, name, size = 40, className = '', rounded = 'xl', fill = false
+  src, name, size = 40, className = '', rounded = 'lg', fill = false
 }: Props) {
   const [failed, setFailed] = useState(false);
-  const RADIUS = { full: 'rounded-full', md: 'rounded-md', lg: 'rounded-lg', xl: 'rounded-xl', '2xl': 'rounded-xl' } as const;
+  // `2xl` mappava su `rounded-xl`: il gradino da 10px esisteva come token e
+  // non era raggiungibile da qui. Un difetto silenzioso — nessuno se ne
+  // accorge, l'angolo è semplicemente sbagliato di due pixel.
+  const RADIUS = { full: 'rounded-full', md: 'rounded-md', lg: 'rounded-lg', xl: 'rounded-xl', '2xl': 'rounded-2xl' } as const;
   const radius = fill ? '' : RADIUS[rounded];
   const box = fill ? { width: '100%', height: '100%' } : { width: size, height: size };
 
   if (!src || failed) {
     return (
       <div
-        className={`${radius} font-display flex shrink-0 items-center justify-center font-medium text-white/90 ${className}`}
+        className={`${radius} font-display flex shrink-0 items-center justify-center font-semibold text-ink ${className}`}
         style={{
           ...box,
           backgroundColor: tintFor(name),

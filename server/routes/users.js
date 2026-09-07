@@ -174,6 +174,49 @@ router.delete('/me', requireAuth, async (req, res) => {
   try {
     const userId = req.user._id;
 
+    /**
+     * Riautenticazione prima di un'azione irreversibile (S14).
+     *
+     * Questa rotta cancella messaggi, conversazioni, personaggi privati e
+     * l'account, con `deleteMany`, senza conferma e senza periodo di grazia.
+     * Bastava quindi un token rubato — una sessione lasciata aperta, un cookie
+     * esfiltrato — e una sola richiesta per distruggere tutto.
+     *
+     * Il resto del progetto tratta l'irreversibilità con molta più cautela: la
+     * scadenza delle sospensioni, il ripristino del turno rimosso in
+     * `messages.js`, la conservazione fiscale delle transazioni anche dopo la
+     * cancellazione. Qui mancava il gradino equivalente.
+     *
+     * La conferma testuale del nome utente, che l'interfaccia già chiedeva,
+     * protegge dalla disattenzione — non da qualcuno che ha la tua sessione: il
+     * nome utente è scritto nella pagina. La password no.
+     *
+     * La condizione è la PRESENZA di una password, non il valore di
+     * `authProvider`. È una differenza sostanziale: `authProvider` ha
+     * `default: 'local'`, quindi un account creato senza password ricadrebbe
+     * comunque nel ramo e non potrebbe più essere eliminato da nessuno — una
+     * guardia che si trasforma in una serratura senza chiave. Chiedere la
+     * credenziale che esiste davvero è l'unica formulazione che non può
+     * chiudere fuori il legittimo proprietario.
+     *
+     * In pratica ogni account reale ne ha una: `POST /auth/register` scrive
+     * sempre `passwordHash`.
+     */
+    // `passwordHash` è `select: false`: va richiesto esplicitamente.
+    const conCredenziali = await User.findById(userId).select('+passwordHash');
+    if (conCredenziali && conCredenziali.passwordHash) {
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
+      if (!password) {
+        return res.status(400).json({
+          error: 'Per eliminare l\'account serve la tua password.',
+          requiresPassword: true
+        });
+      }
+      if (!(await conCredenziali.comparePassword(password))) {
+        return res.status(401).json({ error: 'Password non corretta.' });
+      }
+    }
+
     // Retrieve user chats to clean associated messages and sessions
     const userChats = await Chat.find({ userId }).select('_id characterId').lean();
     const chatIds = userChats.map(c => c._id);

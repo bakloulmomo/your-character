@@ -43,7 +43,7 @@ Variabili da inserire a mano:
 | `GEMINI_API_KEY` | dal passo 2 |
 | `FRONTEND_URL` | l'URL Vercel del passo 4 — **torna a compilarlo dopo** |
 | `BETA_INVITE_CODE` | il codice che darai agli invitati, es. `AMICI-2026` |
-| `ADMIN_EMAILS` | la tua email: al primo accesso diventi amministratore |
+| `ADMIN_EMAILS` | la tua email: ci arrivano le notifiche. **Non ti rende amministratore** |
 
 `JWT_SECRET` lo genera Render da sé (`generateValue: true`). Non copiarlo da
 nessuna parte e non riusarlo altrove.
@@ -95,9 +95,23 @@ curl -X POST https://IL-TUO-DOMINIO.vercel.app/api/auth/register \
 # atteso: 403 con requiresInvite
 ```
 
-Poi, dal browser: registrati col tuo indirizzo (quello in `ADMIN_EMAILS`), apri
-una conversazione, e verifica che **ricaricando la pagina resti connesso** — è la
-prova che il cookie attraversa la riscrittura.
+Poi, dal browser: registrati col tuo indirizzo, apri una conversazione, e
+verifica che **ricaricando la pagina resti connesso** — è la prova che il cookie
+attraversa la riscrittura.
+
+### Diventare amministratore
+
+Nessuna variabile d'ambiente concede il ruolo: un'email non è verificata, quindi
+non è un'identità. Dopo esserti registrato dall'interfaccia, da un terminale con
+l'URI di Atlas a portata:
+
+```bash
+cd server
+MONGODB_URI="<la stessa stringa messa su Render>" \
+  node scripts/grantRole.js tua@email.it admin
+```
+
+Esci e rientra: la voce «Moderazione» compare nella barra laterale.
 
 ## 6. Popolare la galleria
 

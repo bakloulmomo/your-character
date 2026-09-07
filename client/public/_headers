@@ -4,9 +4,15 @@
 #
 # 'unsafe-inline' sugli stili è necessario: React e Tailwind iniettano stili
 # inline a runtime. Sugli script NON c'è, ed è lì che conta.
+#
+# `Permissions-Policy` mancava, pur essendo dichiarato qui sopra che questo file
+# duplica vercel.json: su Netlify la pagina aveva una policy più debole di
+# quella su Vercel, che è esattamente il difetto che la duplicazione doveva
+# impedire.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.stripe.com https://*.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.stripe.com https://*.stripe.com https://*.ingest.sentry.io https://*.ingest.de.sentry.io; frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com")
   Strict-Transport-Security: max-age=31536000; includeSubDomains

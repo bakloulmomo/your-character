@@ -30,7 +30,7 @@ export default function CharacterRow({ title, characters, variant = 'row' }: Pro
       {/* Il titolo di sezione poggia su un filo, come in una rivista: la riga
           separa senza chiudere, e costa un bordo invece di quattro. */}
       <div className="rule mb-5 flex items-baseline justify-between gap-4 pt-5">
-        <h2 className="title-serif text-display-sm">{title}</h2>
+        <h2 className="title-display text-display-sm">{title}</h2>
         {/* Le frecce non hanno più un contorno pieno: sono due glifi che
             rispondono al mouse. Erano due pastiglie identiche ai pulsanti
             d'azione, e pesavano quanto il titolo che accompagnavano. */}

@@ -1,6 +1,7 @@
-import { ArrowLeft, ShieldCheck, Trash2, Download, Lock, Globe2, Clock, AlertTriangle } from 'lucide-react';
+import { Trash2, Download, Lock, Globe2, Clock, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { LegalLayout } from '../components/ui/Legal';
 
 /**
  * Informativa sulla privacy (FASE D — S2-5).
@@ -79,13 +80,17 @@ const LEGAL_BASES = [
   ['Caricamento anticipato dello script di pagamento', 'Consenso (art. 6.1.a GDPR), revocabile dalle impostazioni']
 ];
 
+/**
+ * Uguale a `LegalSection`, ma porta un'icona: qui aiuta a ritrovare una
+ * sezione precisa in un documento che si consulta più di quanto si legga.
+ */
 function Section({ title, icon: Icon, children }: { title: string; icon?: typeof Lock; children: React.ReactNode }) {
   return (
-    <section>
-      <h2 className="mb-3 flex items-center gap-2 font-display text-xl font-bold text-ink">
-        {Icon && <Icon className="h-5 w-5 text-accent-glow" aria-hidden="true" />} {title}
+    <section className="rule pt-8">
+      <h2 className="title-display mb-4 flex items-center gap-2.5 text-display-sm">
+        {Icon && <Icon className="h-5 w-5 text-ink-dim" aria-hidden="true" />} {title}
       </h2>
-      <div className="space-y-4 leading-relaxed text-ink-muted">{children}</div>
+      <div className="space-y-4 text-base leading-relaxed text-ink-muted">{children}</div>
     </section>
   );
 }
@@ -93,30 +98,8 @@ function Section({ title, icon: Icon, children }: { title: string; icon?: typeof
 export default function PrivacyPage() {
   useDocumentTitle('Informativa privacy');
   return (
-    <div className="min-h-screen bg-bg font-sans text-ink">
-      <header className="glass-panel sticky top-0 z-50 border-b border-line px-6 py-4">
-        <div className="mx-auto flex max-w-4xl items-center gap-4">
-          <Link
-            to="/"
-            id="privacy-back-btn"
-            aria-label="Torna alla home"
-            className="rounded-xl p-2 text-ink-muted transition-all hover:bg-surface-hover hover:text-ink"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div>
-            <h1 className="font-display text-lg font-bold text-ink">Informativa sulla privacy</h1>
-            <p className="text-xs text-ink-dim">Ultimo aggiornamento: 28 agosto 2026</p>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-4xl px-6 py-12">
-        <div className="glass-card space-y-8 rounded-xl border border-line p-8">
-          <section>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
-              <ShieldCheck className="h-4 w-4" /> Regolamento (UE) 2016/679
-            </div>
+    <LegalLayout title="Informativa sulla privacy" updated="Ultimo aggiornamento: 28 agosto 2026">
+      <section>
             <p className="leading-relaxed text-ink-muted">
               Questa informativa descrive che cosa <span className="font-semibold text-ink">your-character</span> fa
               davvero con i tuoi dati. Il punto più importante è in cima e non sepolto in fondo:{' '}
@@ -285,8 +268,6 @@ export default function PrivacyPage() {
               </a>. Rispondiamo entro un mese, come previsto dall’art. 12.
             </p>
           </Section>
-        </div>
-      </main>
-    </div>
+    </LegalLayout>
   );
 }

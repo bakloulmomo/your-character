@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { sendMail } = require('../services/mailService');
 const { requireAuth, attachUser } = require('../middleware/auth');
-const { jwtSecret, isProduction, adminEmails, welcomeCredits, betaInviteCode, features } = require('../config/env');
+const { jwtSecret, isProduction, welcomeCredits, betaInviteCode, features } = require('../config/env');
 const { serverFailure, warnFailure } = require('../services/failure');
 
 const getJwtSecret = () => jwtSecret();
@@ -29,6 +29,23 @@ const positiveInt = (value, fallback) => {
   return Number.isInteger(n) && n > 0 ? n : fallback;
 };
 
+/**
+ * Spegnimento nei test, ma NON incondizionato (S13).
+ *
+ * Era `skip: () => process.env.NODE_ENV === 'test'` su entrambi i limitatori
+ * di questo file: nessun test poteva riaccenderli, quindi la protezione
+ * anti-brute-force più importante dell'applicazione era l'unica priva di un
+ * test di regressione. Alzando `LOGIN_RATE_MAX` a un valore assurdo, o
+ * togliendo il middleware dalla rotta, o rompendo `positiveInt`, la suite
+ * restava verde.
+ *
+ * `middleware/rateLimit.js` faceva già la cosa giusta con `FORCE_RATE_LIMIT`:
+ * qui era rimasta fuori, ed è esattamente la classe di difetto che
+ * `security.test.js` è stato scritto per prevenire altrove — «la guardia è
+ * collegata al percorso, non solo esistente».
+ */
+const skipInTests = () => process.env.NODE_ENV === 'test' && process.env.FORCE_RATE_LIMIT !== '1';
+
 const loginLimiter = rateLimit({
   windowMs: positiveInt(process.env.LOGIN_RATE_WINDOW_MS, 15 * 60 * 1000),
   max: positiveInt(process.env.LOGIN_RATE_MAX, 5),
@@ -36,7 +53,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  skip: () => process.env.NODE_ENV === 'test'
+  skip: skipInTests
 });
 
 const registerLimiter = rateLimit({
@@ -45,7 +62,7 @@ const registerLimiter = rateLimit({
   message: { error: 'Troppe registrazioni effettuate da questo IP. Riprova più tardi.' },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV === 'test'
+  skip: skipInTests
 });
 
 
@@ -136,24 +153,35 @@ const formatUserResponse = (user) => ({
 });
 
 /**
- * Innesco del primo moderatore (FASE D — S2-13).
+ * NESSUN innesco automatico del ruolo — e il perché va scritto, perché la
+ * versione precedente sembrava ragionevole (S2-13, corretta qui).
  *
- * Il ruolo si assegna normalmente con `scripts/grantRole.js`, ma su un'istanza
- * appena creata nessuno può ancora eseguirlo su un account che non esiste:
- * `ADMIN_EMAILS` risolve la partenza a freddo. Viene applicato all'accesso, non
- * letto a ogni richiesta, così il ruolo resta scritto sull'account e revocarlo
- * dalla variabile non ne cancella la traccia.
+ * `applyAdminBootstrap` promuoveva a `admin` chiunque avesse un'email presente
+ * in `ADMIN_EMAILS`, e la applicava sia all'accesso sia alla REGISTRAZIONE.
+ * Ma non esiste alcuna verifica dell'indirizzo: nessun token di conferma,
+ * nessun campo `emailVerified`. L'email, qui, non è un'identità — è una
+ * stringa che il richiedente sceglie.
+ *
+ * Ne seguiva questo: `ADMIN_EMAILS` viene configurata sul servizio PRIMA che
+ * l'account del titolare esista, cioè al primo deploy, ed è tipicamente
+ * l'indirizzo pubblico del progetto. Chiunque lo conoscesse poteva registrarsi
+ * con quell'indirizzo e ottenere la coda di moderazione, le email di tutti gli
+ * iscritti, il `systemPrompt` di ogni personaggio e il potere di sospendere
+ * account. Il titolare, arrivando dopo, si sarebbe sentito rispondere
+ * «Indirizzo email già registrato».
+ *
+ * Spostare la promozione al solo accesso non avrebbe chiuso niente: chi si
+ * registra poi entra, e viene promosso un istante dopo.
+ *
+ * Un privilegio non può nascere da un dato che l'utente stesso fornisce. Il
+ * ruolo si concede FUORI BANDA, con `scripts/grantRole.js`, che richiede
+ * l'accesso al database — cioè una cosa che solo chi amministra il servizio ha:
+ *
+ *   MONGODB_URI="<uri di produzione>" node scripts/grantRole.js me@example.com admin
+ *
+ * `ADMIN_EMAILS` sopravvive con un solo compito, che non concede nulla: essere
+ * il recapito di ripiego per le notifiche allo staff (`routes/feedback.js`).
  */
-async function applyAdminBootstrap(user) {
-  const admins = adminEmails();
-  if (admins.length === 0) return user;
-  if (!admins.includes((user.email || '').toLowerCase())) return user;
-  if (user.role === 'admin') return user;
-
-  user.role = 'admin';
-  await user.save();
-  return user;
-}
 
 // POST /api/auth/register - Register new local user account
 router.post('/register', registerLimiter, async (req, res) => {
@@ -219,9 +247,6 @@ router.post('/register', registerLimiter, async (req, res) => {
       throw createErr;
     }
 
-
-    await applyAdminBootstrap(newUser);
-
     const token = generateToken(newUser);
 
     // Set secure HttpOnly Cookie
@@ -272,7 +297,6 @@ router.post('/login', loginLimiter, async (req, res) => {
     // Update last login timestamp
     user.lastLoginAt = new Date();
     await user.save();
-    await applyAdminBootstrap(user);
 
     const token = generateToken(user);
 

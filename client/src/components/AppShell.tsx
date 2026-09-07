@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
+import ConfirmDialog from './ui/ConfirmDialog';
 import Toaster from './ui/Toaster';
 import AuthModal from './AuthModal';
 import BuyCreditsModal from './BuyCreditsModal';
@@ -51,7 +52,7 @@ export default function AppShell() {
         */}
       <a
         href="#contenuto"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-xl focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink"
       >
         Vai al contenuto
       </a>
@@ -86,6 +87,10 @@ export default function AppShell() {
       <BuyCreditsModal />
       <ReportModal />
       <FeedbackModal />
+      {/* Sopra gli altri modali nella scala dei livelli: una conferma può
+          essere richiesta DA un modale — eliminare un personaggio dalla sua
+          scheda, per dire — e deve comparire davanti a chi l'ha chiesta. */}
+      <ConfirmDialog />
       <Toaster />
       <CookieBanner />
     </div>

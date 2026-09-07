@@ -164,6 +164,81 @@ describe('FASE C — Streaming e azioni sui messaggi', () => {
     });
   });
 
+  /**
+   * Un turno già arrivato allo schermo non si cancella.
+   *
+   * Gemini valuta la sicurezza MENTRE genera, quindi il taglio arriva quasi
+   * sempre a metà di un testo che fino a quel momento era passato. Il codice
+   * trattava quel taglio come un guasto: buttava via tutto e rispondeva con un
+   * errore, e l'utente vedeva la risposta comparire e poi sparire. Con un
+   * personaggio scritto per essere pungente — «tua cugina, un po' gelosa, che
+   * ti dà della viziata» — succedeva a ogni singolo messaggio.
+   */
+  describe('risposta troncata dai filtri del modello', () => {
+    const { generateResponseStream } = require('../services/geminiService');
+
+    it('la parte già generata viene consegnata invece di essere buttata', async () => {
+      // Il modello emette due frammenti buoni, poi si ferma per sicurezza.
+      const gemini = require('@google/generative-ai');
+      const originale = gemini.GoogleGenerativeAI.prototype.getGenerativeModel;
+      gemini.GoogleGenerativeAI.prototype.getGenerativeModel = () => ({
+        generateContentStream: async () => ({
+          stream: (async function* () {
+            yield { text: () => 'Prima parte, ', candidates: [{ finishReason: null }] };
+            yield { text: () => 'seconda parte.', candidates: [{ finishReason: null }] };
+            yield { text: () => '', candidates: [{ finishReason: 'SAFETY' }] };
+          })()
+        })
+      });
+
+      const precedente = process.env.AI_MODE;
+      process.env.AI_MODE = 'live';
+      process.env.GEMINI_API_KEY = 'chiave-non-segnaposto-per-il-test-0123456789';
+
+      try {
+        const pezzi = [];
+        const r = await generateResponseStream(
+          [{ role: 'system', content: 'istruzioni' }, { role: 'user', content: 'ciao' }],
+          'Prova',
+          (d) => pezzi.push(d)
+        );
+
+        expect(r.content).toBe('Prima parte, seconda parte.');
+        expect(pezzi.join('')).toBe('Prima parte, seconda parte.');
+        // Il taglio resta registrato: serve a chi modera, non all'utente.
+        expect(r.truncatedBySafety).toBe('SAFETY');
+      } finally {
+        gemini.GoogleGenerativeAI.prototype.getGenerativeModel = originale;
+        if (precedente === undefined) delete process.env.AI_MODE; else process.env.AI_MODE = precedente;
+      }
+    });
+
+    it('ma se non era arrivato NIENTE, resta un errore', async () => {
+      const gemini = require('@google/generative-ai');
+      const originale = gemini.GoogleGenerativeAI.prototype.getGenerativeModel;
+      gemini.GoogleGenerativeAI.prototype.getGenerativeModel = () => ({
+        generateContentStream: async () => ({
+          stream: (async function* () {
+            yield { text: () => '', candidates: [{ finishReason: 'SAFETY' }] };
+          })()
+        })
+      });
+
+      const precedente = process.env.AI_MODE;
+      process.env.AI_MODE = 'live';
+      process.env.GEMINI_API_KEY = 'chiave-non-segnaposto-per-il-test-0123456789';
+
+      try {
+        await expect(
+          generateResponseStream([{ role: 'user', content: 'ciao' }], 'Prova', () => {})
+        ).rejects.toMatchObject({ safetyBlocked: true });
+      } finally {
+        gemini.GoogleGenerativeAI.prototype.getGenerativeModel = originale;
+        if (precedente === undefined) delete process.env.AI_MODE; else process.env.AI_MODE = precedente;
+      }
+    });
+  });
+
   describe('eliminazione di un singolo messaggio', () => {
     it('il proprietario può eliminare un messaggio della propria chat', async () => {
       const message = await Message.create({ chatId: chat._id, role: 'user', content: 'da eliminare' });
@@ -173,6 +248,46 @@ describe('FASE C — Streaming e azioni sui messaggi', () => {
 
       expect(res.status).toBe(200);
       expect(await Message.findById(message._id)).toBeNull();
+    });
+
+    /**
+     * Eliminare deve togliere il messaggio dalla CONVERSAZIONE, non solo dalla
+     * vista: il riassunto viene reinserito nel contesto a ogni turno, quindi
+     * finché ci resta dentro il personaggio continua a ricordare ciò che
+     * l'utente ha cancellato.
+     */
+    it('la memoria lunga smette di contenere il messaggio eliminato', async () => {
+      await Chat.findByIdAndUpdate(chat._id, {
+        conversationSummary: 'L utente ha raccontato un fatto personale che ora ha cancellato.'
+      });
+      const message = await Message.create({ chatId: chat._id, role: 'user', content: 'un fatto personale' });
+
+      await request(app)
+        .delete(`/api/messages/item/${message._id}`)
+        .set('x-mock-clerk-id', CLERK)
+        .expect(200);
+
+      const dopo = await Chat.findById(chat._id);
+      expect(dopo.conversationSummary).toBe('');
+    });
+
+    it('i contatori della conversazione si riallineano ai messaggi rimasti', async () => {
+      const primo = await Message.create({ chatId: chat._id, role: 'user', content: 'primo' });
+      await Message.create({ chatId: chat._id, role: 'assistant', content: 'secondo' });
+      // Un contatore già disallineato: prima `$inc: -1` lo portava sotto zero.
+      await Chat.findByIdAndUpdate(chat._id, { messageCount: 0, lastMessageAt: new Date('2020-01-01') });
+
+      const res = await request(app)
+        .delete(`/api/messages/item/${primo._id}`)
+        .set('x-mock-clerk-id', CLERK)
+        .expect(200);
+
+      const dopo = await Chat.findById(chat._id);
+      expect(dopo.messageCount).toBe(1);
+      expect(dopo.lastMessageAt.getFullYear()).toBeGreaterThan(2020);
+      // La risposta riporta lo stato aggiornato, così il client non deve
+      // indovinarlo né ricaricare tutto.
+      expect(res.body.chat.messageCount).toBe(1);
     });
 
     it('un estraneo non può eliminare i messaggi di un altro', async () => {

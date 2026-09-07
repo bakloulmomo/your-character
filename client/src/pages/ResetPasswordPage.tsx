@@ -63,7 +63,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
-      <h1 className="mb-1 font-display text-2xl font-bold text-ink">Scegli una nuova password</h1>
+      <h1 className="mb-1 title-display text-display-md">Scegli una nuova password</h1>
       <p className="mb-6 text-sm text-ink-muted">
         Al salvataggio tutte le sessioni aperte verranno chiuse.
       </p>

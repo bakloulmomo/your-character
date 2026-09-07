@@ -10,6 +10,8 @@ import Modal from '../components/ui/Modal';
 import { CONSENT_VERSION, getConsent, setConsent } from '../lib/consent';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { errorMessage } from '../lib/apiError';
+import { Button } from '../components/ui/Button';
+import { PageContainer, PageHeader } from '../components/ui/Page';
 
 interface TransactionRow {
   _id: string;
@@ -64,6 +66,7 @@ export default function SettingsPage() {
   const [exporting, setExporting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [functional, setFunctional] = useState<boolean>(getConsent()?.functional ?? false);
   const [savingPref, setSavingPref] = useState<string | null>(null);
@@ -145,12 +148,19 @@ export default function SettingsPage() {
   const deleteAccount = async () => {
     setDeleting(true);
     try {
-      await api.delete('/users/me');
+      /**
+       * La password viaggia nel CORPO, non nell'indirizzo.
+       *
+       * `api.delete` accetta la configurazione come secondo argomento: un
+       * `DELETE` con corpo è previsto da axios e dal server, mentre una
+       * password in querystring finirebbe nei log di ogni proxy attraversato.
+       */
+      await api.delete('/users/me', { data: { password: confirmPassword } });
       notify('Account eliminato.', 'success');
       await logout();
       navigate('/');
-    } catch {
-      notify('Eliminazione non riuscita.', 'error');
+    } catch (err) {
+      notify(errorMessage(err, 'Eliminazione non riuscita.'), 'error');
       setDeleting(false);
     }
   };
@@ -171,8 +181,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-8">
-      <h1 className="mb-8 font-display text-2xl font-bold text-ink">Impostazioni</h1>
+    <PageContainer width="prose">
+      <PageHeader eyebrow="Il tuo account" title="Impostazioni" />
 
       {/* --- Cookie (S2-6) ---------------------------------------------------- */}
       <Card
@@ -198,7 +208,7 @@ export default function SettingsPage() {
               aria-pressed={functional === option.value}
               className={`rounded-xl border px-4 py-2 text-sm transition-colors ${
                 functional === option.value
-                  ? 'border-accent bg-accent-wash text-accent-glow'
+                  ? 'border-ink text-ink'
                   : 'border-line bg-bg text-ink-muted hover:border-line-strong'
               }`}
             >
@@ -253,7 +263,7 @@ export default function SettingsPage() {
                   proprio sul comando dei contenuti per adulti. */}
               <span
                 aria-hidden="true"
-                className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-ink transition-transform ${
                   user.nsfwEnabled === true ? 'translate-x-[22px]' : 'translate-x-0.5'
                 }`}
               />
@@ -370,7 +380,7 @@ export default function SettingsPage() {
         </button>
       </Card>
 
-      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Eliminare definitivamente l'account?">
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Sei sicuro di voler eliminare il tuo account?">
         <p className="mb-4 text-sm text-ink-muted">
           Per confermare, scrivi il tuo nome utente <strong className="text-ink">{user.username}</strong>.
         </p>
@@ -383,18 +393,39 @@ export default function SettingsPage() {
           autoComplete="off"
           className="input-field"
         />
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={() => setDeleteOpen(false)} className="btn-secondary rounded-xl px-4 py-2 text-sm">Annulla</button>
-          <button
+
+        {/**
+          * La password, oltre al nome utente.
+          *
+          * Il nome utente è scritto nella pagina: protegge dalla disattenzione,
+          * non da qualcuno che ha la tua sessione. Questa richiesta è verificata
+          * dal SERVER — qui è solo il campo — perché una conferma che vive
+          * nell'interfaccia non è una conferma.
+          */}
+        <label htmlFor="confirm-delete-password" className="mt-4 mb-1.5 block text-xs font-medium text-ink-muted">
+          La tua password
+        </label>
+        <input
+          id="confirm-delete-password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          autoComplete="current-password"
+          className="input-field"
+        />
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button onClick={() => setDeleteOpen(false)}>Annulla</Button>
+          <Button
+            variant="danger-strong"
             onClick={deleteAccount}
-            disabled={confirmText !== user.username || deleting}
-            className="flex items-center gap-2 rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/85 disabled:opacity-40"
+            disabled={confirmText !== user.username || confirmPassword.length === 0}
+            loading={deleting}
           >
-            {deleting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Elimina definitivamente
-          </button>
+          </Button>
         </div>
       </Modal>
-    </div>
+    </PageContainer>
   );
 }

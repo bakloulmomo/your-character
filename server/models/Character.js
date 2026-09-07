@@ -102,19 +102,34 @@ const characterSchema = new mongoose.Schema({
     default: false
   },
   /**
-   * Stato di revisione (FASE D — S2-2).
+   * VISIBILITÀ, non stato di revisione.
    *
-   * Il default era `approved`: chiunque pubblicava in galleria con un click,
-   * senza che nessuno guardasse nulla. Ora un personaggio PUBBLICO nasce
-   * `pending` e compare in galleria solo dopo la revisione; un personaggio
-   * PRIVATO nasce `approved` perché non è visibile a nessun altro ed è
-   * immediatamente utilizzabile dal suo creatore.
-   * La regola è applicata in `routes/characters.js`, dove si conosce `isPublic`.
+   * Il campo ha cambiato significato con il passaggio alla moderazione
+   * successiva. Prima diceva «è già stato esaminato»: un personaggio pubblico
+   * nasceva `pending` e restava invisibile a tutti finché una persona non lo
+   * approvava. In pratica non lo approvava nessuno — il ruolo di moderatore si
+   * concede solo fuori banda, con accesso al database — quindi la galleria
+   * restava ferma ai personaggi seminati all'inizio e chi pubblicava non vedeva
+   * mai comparire il proprio.
+   *
+   * Ora dice soltanto «è online»:
+   *   `approved` → visibile a chiunque
+   *   `rejected` → rimosso da un moderatore, e ci resta anche se l'autore lo
+   *                modifica (altrimenti la rimozione sarebbe aggirabile
+   *                cambiando una virgola)
+   *   `pending`  → non viene più assegnato. Resta nell'enum per i documenti
+   *                creati prima del cambiamento: il filtro della galleria è
+   *                `$ne: 'rejected'`, quindi tornano visibili senza migrazione.
+   *
+   * Chi ha esaminato un personaggio, e quando, lo dice `moderatedAt`: è quello
+   * ad alimentare la coda di revisione. Il filtro che protegge davvero resta
+   * automatico e viene PRIMA del salvataggio — `moderateCharacterProfile` in
+   * `routes/characters.js`, che un profilo vietato non lo scrive affatto.
    */
   moderationStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
-    default: 'pending',
+    default: 'approved',
     index: true
   },
   moderationReason: {

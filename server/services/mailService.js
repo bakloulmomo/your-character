@@ -18,9 +18,28 @@ async function sendMail({ to, subject, text }) {
       logger.error({ to }, 'RESEND_API_KEY non configurato: email NON inviata');
       return { delivered: false, reason: 'mailer_non_configurato' };
     }
-    // In test il contenuto non viene stampato: renderebbe illeggibile l'output.
+    /**
+     * Il CORPO dell'email non finisce nel log (S8).
+     *
+     * Qui c'era `logger.info({ to, subject, text }, ...)`. Il `text` del
+     * recupero password è costruito in `routes/auth.js` e contiene l'URL
+     * completo con il token:
+     *
+     *     .../reset-password?token=<segreto valido 60 minuti>
+     *
+     * La lista `REDACTED` del logger include `'token'` come chiave di primo
+     * livello: non intercetta un token annidato DENTRO il valore di `text`.
+     * Quindi in qualunque ambiente senza `RESEND_API_KEY` e con `NODE_ENV`
+     * diverso da `production` e `test` — staging, anteprima, un container di
+     * sviluppo condiviso — bastava chiamare `/forgot-password` con l'email di
+     * chiunque e leggere i log per prendersi quell'account.
+     *
+     * Che in produzione la riga non venisse emessa non è una difesa: era una
+     * difesa per ambiente, non per costruzione. Ora nel log finiscono solo il
+     * destinatario e l'oggetto, che bastano a capire che l'invio è avvenuto.
+     */
     if (process.env.NODE_ENV !== 'test') {
-      logger.info({ to, subject, text }, 'Email non inviata (sviluppo): contenuto registrato');
+      logger.info({ to, subject }, 'Email non inviata (sviluppo): destinatario e oggetto');
     }
     return { delivered: false, reason: 'sviluppo' };
   }

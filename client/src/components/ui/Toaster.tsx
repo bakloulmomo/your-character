@@ -57,7 +57,7 @@ export default function Toaster() {
              */
             role={toast.kind === 'error' ? 'alert' : 'status'}
             aria-live={toast.kind === 'error' ? 'assertive' : 'polite'}
-            className={`animate-slide-down glass-panel pointer-events-auto flex items-start gap-2.5 rounded-xl border px-4 py-3 shadow-xl ${TONES[toast.kind]}`}
+            className={`animate-slide-down glass-panel pointer-events-auto flex items-start gap-2.5 rounded-lg border px-4 py-3 shadow-popover ${TONES[toast.kind]}`}
           >
             <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p className="flex-1 text-sm text-ink">{toast.message}</p>

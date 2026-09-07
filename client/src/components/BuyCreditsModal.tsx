@@ -304,7 +304,7 @@ export default function BuyCreditsModal() {
                 <div key={s.id} className="flex flex-col justify-between rounded-xl border border-line bg-surface p-4">
                   <div>
                     <div className="text-xs font-medium text-ink-muted mb-1">{s.name}</div>
-                    <div className="mb-2 font-display text-xl font-semibold tabular-nums text-ink">
+                    <div className="title-display tabular mb-2 text-display-sm">
                       {s.price}<span className="text-xs text-ink-dim font-normal">{s.period}</span>
                     </div>
                     <ul className="space-y-1 mb-3">
@@ -375,7 +375,7 @@ export default function BuyCreditsModal() {
               >
                 <span>
                   <span className="mb-1 block text-xs font-medium text-ink-muted">{pkg.name}</span>
-                  <span className="mb-1.5 block font-display text-2xl font-semibold tabular-nums text-ink">{pkg.price}</span>
+                  <span className="mb-1.5 block title-display text-display-md tabular-nums text-ink">{pkg.price}</span>
                   <span className="mb-2 block text-xs text-ink-muted">+{pkg.credits} crediti</span>
                   <span className="block text-xs leading-snug text-ink-dim">{pkg.description}</span>
                 </span>

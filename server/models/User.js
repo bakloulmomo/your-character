@@ -64,9 +64,12 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Filtro di tre rotte di pagamento (rinnovo, disdetta, aggiornamento
+  // abbonamento): senza indice ognuna scansionava l'intera collezione utenti.
   stripeCustomerId: {
     type: String,
-    default: null
+    default: null,
+    index: true
   },
   // Disdetta programmata: l'accesso resta attivo fino a subscriptionExpiresAt.
   subscriptionCancelAtPeriodEnd: {
@@ -91,7 +94,9 @@ const userSchema = new mongoose.Schema({
   /**
    * Ruolo (FASE D — S2-13). Serve a proteggere la coda di revisione: senza un
    * ruolo, «interfaccia di moderazione» significherebbe endpoint aperti a
-   * chiunque. Si assegna con `scripts/grantRole.js` o tramite ADMIN_EMAILS.
+   * chiunque. Si assegna SOLO con `scripts/grantRole.js`, che richiede
+   * l'accesso al database: un privilegio non può nascere da un dato che
+   * l'utente stesso fornisce, come un indirizzo email mai verificato.
    */
   role: {
     type: String,
@@ -157,7 +162,11 @@ const userSchema = new mongoose.Schema({
   passwordResetTokenHash: {
     type: String,
     default: null,
-    select: false
+    select: false,
+    // Filtro di `/reset-password`: cinque tentativi all'ora per indirizzo IP,
+    // ma nessun tetto globale, quindi senza indice era una scansione completa
+    // della collezione utenti a richiesta.
+    index: true
   },
   passwordResetExpiresAt: {
     type: Date,
@@ -328,10 +337,31 @@ async function reserveAllowance(userId, subscription, kind) {
     };
   }
 
+  /**
+   * Piano sconosciuto ⇒ NESSUNA allowance (S3).
+   *
+   * Qui la riga era l'opposto:
+   *
+   *     if (!limits) return { user: await User.findById(userId), refund: ... };
+   *
+   * cioè un valore di `subscription` non previsto concedeva chiamate al modello
+   * ILLIMITATE, senza addebito e con un rimborso che non rimborsava niente. È
+   * un fallimento in apertura, in una funzione il cui unico scopo è chiudere.
+   *
+   * Non era irraggiungibile. L'enum dello schema non protegge, perché ogni
+   * scrittura di `subscription` passa da `findByIdAndUpdate`, che in Mongoose
+   * NON esegue i validator se non glielo si chiede — e non glielo si chiedeva.
+   * Bastava una regressione in `/subscribe` o un metadato storto in un evento
+   * Stripe per lasciare un account su `subscription: 'pro'`, e da lì in poi
+   * quell'account avrebbe consumato la quota Gemini condivisa a costo zero,
+   * senza che nulla lo segnalasse.
+   *
+   * `runValidators: true` è stato aggiunto sulle tre scritture in
+   * routes/payments.js; questa riga è la seconda difesa, quella che regge anche
+   * se un valore sconosciuto arriva lo stesso.
+   */
   const limits = limitsFor(subscription);
-  if (!limits) {
-    return { user: await User.findById(userId), refund: async () => User.findById(userId) };
-  }
+  if (!limits) return null;
 
   const counter = isImage ? 'dailyImageCount' : 'dailyMessageCount';
   const ceiling = isImage ? limits.images : limits.messages;
