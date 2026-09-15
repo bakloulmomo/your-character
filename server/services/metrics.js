@@ -30,6 +30,16 @@ const emptyDay = (day) => ({
   llm: { calls: 0, errors: 0, costEur: 0 },
   image: { calls: 0, errors: 0, costEur: 0 },
   moderation: { blocked: 0, crisis: 0, flagged: 0, outputBlocked: 0 },
+  /**
+   * Email tentate e non recapitate.
+   *
+   * Sta qui e non solo nei log perche' la posta non consegnata e' il guasto
+   * che non produce nessun sintomo: l'utente vede «controlla la casella», il
+   * server risponde 200, e nulla nell'interfaccia dice che il messaggio non e'
+   * mai partito. Un contatore visibile nel pannello lo rende un fatto
+   * osservabile invece di una riga di log fra migliaia.
+   */
+  mail: { sent: 0, failed: 0 },
   // Un allarme che si ripete a ogni chiamata smette di essere un allarme:
   // si emette una volta per giornata e per tipo.
   alerted: { cost: false, llmErrorRate: false, imageErrorRate: false }
@@ -92,6 +102,14 @@ function recordModeration(kind) {
   if (typeof s.moderation[kind] === 'number') s.moderation[kind] += 1;
 }
 
+/**
+ * @param {boolean} delivered Esito dell'invio.
+ */
+function recordMail(delivered) {
+  const s = rollIfNeeded();
+  s.mail[delivered ? 'sent' : 'failed'] += 1;
+}
+
 function snapshot() {
   const s = rollIfNeeded();
   const rate = (b) => (b.calls > 0 ? Number((b.errors / b.calls).toFixed(3)) : 0);
@@ -101,6 +119,7 @@ function snapshot() {
     llm: { ...s.llm, costEur: Number(s.llm.costEur.toFixed(4)), errorRate: rate(s.llm) },
     image: { ...s.image, costEur: Number(s.image.costEur.toFixed(4)), errorRate: rate(s.image) },
     moderation: { ...s.moderation },
+    mail: { ...s.mail },
     thresholds: { costEur: COST_ALERT_EUR, errorRate: ERROR_RATE_ALERT, minSample: MIN_SAMPLE },
     alerted: { ...s.alerted },
     // Detto apertamente, perché chi legge questi numeri deve sapere che cosa
@@ -114,4 +133,4 @@ function resetMetrics() {
   state = emptyDay(today());
 }
 
-module.exports = { recordCall, recordModeration, snapshot, resetMetrics };
+module.exports = { recordCall, recordModeration, recordMail, snapshot, resetMetrics };

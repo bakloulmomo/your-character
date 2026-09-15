@@ -48,6 +48,7 @@ describe('Feedback della beta', () => {
       Chat.deleteMany({}), Message.deleteMany({}), Character.deleteMany({})
     ]);
     utente = await User.create({
+    emailVerifiedAt: new Date(),
       email: 'utente@example.com', username: 'utente', authProvider: 'local',
       birthdate: new Date('1990-01-01'), credits: 42
     });
@@ -123,6 +124,7 @@ describe('Feedback della beta', () => {
       await invia({ type: 'wants_more' });
 
       const admin = await User.create({
+    emailVerifiedAt: new Date(),
         email: 'admin@example.com', username: 'admin', authProvider: 'local', role: 'admin'
       });
       const res = await request(app).get('/api/feedback')
