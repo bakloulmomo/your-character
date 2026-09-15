@@ -45,7 +45,8 @@ describe('FASE E — Osservabilità', () => {
   beforeEach(async () => {
     resetMetrics();
     await Promise.all([User.deleteMany({}), Message.deleteMany({}), Chat.deleteMany({}), Character.deleteMany({})]);
-    staff = await User.create({ email: 'mod@example.com', username: 'moderatore', role: 'moderator' });
+    staff = await User.create({
+    emailVerifiedAt: new Date(), email: 'mod@example.com', username: 'moderatore', role: 'moderator' });
     staffToken = tokenFor(staff);
   });
 
@@ -117,7 +118,8 @@ describe('FASE E — Osservabilità', () => {
   // ---- Endpoint delle metriche ---------------------------------------------
   describe('GET /api/admin/metrics', () => {
     it('è riservato al team', async () => {
-      const plain = await User.create({ email: 'tizio@example.com', username: 'tizio' });
+      const plain = await User.create({
+    emailVerifiedAt: new Date(), email: 'tizio@example.com', username: 'tizio' });
       const res = await request(app).get('/api/admin/metrics').set('Authorization', `Bearer ${tokenFor(plain)}`);
       expect(res.status).toBe(404);
     });
