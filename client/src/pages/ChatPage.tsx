@@ -411,7 +411,7 @@ export default function ChatPage() {
         icon={<MessageSquareOff className="h-7 w-7" />}
         title="Conversazione non trovata"
         description="Potrebbe essere stata eliminata."
-        action={<Link to="/" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
+        action={<Link to="/discover" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
       />
     );
   }

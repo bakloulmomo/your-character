@@ -118,7 +118,7 @@ export default function ModerationPage() {
       <EmptyState
         title="Pagina non disponibile"
         description="Questa sezione è riservata al team di moderazione."
-        action={<Link to="/" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
+        action={<Link to="/discover" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
       />
     );
   }

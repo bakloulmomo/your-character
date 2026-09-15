@@ -20,7 +20,7 @@ export default function Sidebar() {
     setAuthModalOpen, setBuyCreditsModalOpen, features, setFeedbackModalOpen, askConfirm
   } = useStore();
 
-  const { chats, status, deleteChat } = useChats();
+  const { chats, status, deleteChat, loadMore, hasMore, loadingMore } = useChats();
   const [query, setQuery] = useState('');
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -102,10 +102,13 @@ export default function Sidebar() {
         {/* Intestazione */}
         <div className="flex items-center justify-between gap-2 px-3 py-3">
           <Link
-            to="/"
+            to="/discover"
             className={`flex items-center gap-2 font-display text-sm font-bold text-ink ${collapsed ? 'md:mx-auto' : ''}`}
           >
-            <img src="/favicon_logo.jpeg" alt="" className="h-7 w-7 rounded-md object-cover" />
+            {/* Il vettoriale, non più il JPEG con la scacchiera dentro.
+                `object-cover` su un logo era già sbagliato di suo: ritaglia il
+                marchio invece di contenerlo. */}
+            <img src="/favicon.svg" alt="" className="h-7 w-7" />
             {!collapsed && <span>your-character</span>}
           </Link>
 
@@ -168,7 +171,7 @@ export default function Sidebar() {
           )}
 
           <nav className="flex flex-col gap-1">
-            {navItem('/', 'Scopri', Compass)}
+            {navItem('/discover', 'Scopri', Compass)}
             {/* La voce «Cerca» esiste solo da compressa.
                 Da espansa il campo qui sopra porta alla stessa pagina e ci
                 arriva con il termine gia' scritto: averli entrambi significava
@@ -214,7 +217,7 @@ export default function Sidebar() {
 
               {user && status === 'ready' && chats.length === 0 && (
                 <p className="px-1 text-xs leading-relaxed text-ink-dim">
-                  Nessuna conversazione. Scegli un personaggio da <Link to="/" className="text-ink-muted underline underline-offset-2 hover:text-ink">Scopri</Link>.
+                  Nessuna conversazione. Scegli un personaggio da <Link to="/discover" className="text-ink-muted underline underline-offset-2 hover:text-ink">Scopri</Link>.
                 </p>
               )}
 
@@ -286,6 +289,26 @@ export default function Sidebar() {
                   </ul>
                 </div>
               ))}
+
+              {/**
+                * «Carica altre».
+                *
+                * Il server manda le trenta conversazioni più recenti e il
+                * seguito in un'intestazione. Finché il client non lo leggeva,
+                * chi ne aveva più di trenta non poteva più raggiungere le
+                * altre: esistevano, erano ordinate, e non c'era un modo di
+                * arrivarci. Compare solo quando ce ne sono davvero, così a chi
+                * ha poche conversazioni non resta un comando che non fa nulla.
+                */}
+              {hasMore && (
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="btn-ghost mt-1 w-full rounded-md py-2 text-xs"
+                >
+                  {loadingMore ? 'Carico…' : 'Carica altre conversazioni'}
+                </button>
+              )}
             </>
           )}
 

@@ -1,3 +1,27 @@
+/**
+ * I CARATTERI SONO OSPITATI QUI, non su Google.
+ *
+ * `index.html` li chiedeva a `fonts.googleapis.com`, e quella richiesta parte
+ * dal browser dell'utente PRIMA di qualunque consenso: porta con sé
+ * l'indirizzo IP, lo user-agent e il referrer, verso un servizio negli Stati
+ * Uniti. Un tribunale tedesco (Monaco, gennaio 2022) ha stabilito che è un
+ * trasferimento di dati personali senza base giuridica, e da allora è una
+ * delle contestazioni più frequenti in Europa — anche perché è banale da
+ * verificare dall'esterno: basta aprire il pannello di rete.
+ *
+ * `@fontsource-variable` mette gli stessi due caratteri fra le dipendenze:
+ * Vite li impacchetta, arrivano dal nostro dominio, e in più spariscono un
+ * `preconnect` e due richieste bloccanti verso un terzo. La CSP di
+ * `vercel.json` e `public/_headers` non ha più bisogno di aprire `font-src`
+ * e `style-src` a domini esterni.
+ *
+ * `wdth.css` e non `index.css` per Archivo: è la variante con l'asse di
+ * LARGHEZZA, che è tutto ciò che distingue l'insegna del prodotto da un
+ * grottesco qualunque.
+ */
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/schibsted-grotesk/index.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

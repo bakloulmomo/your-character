@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Download, Trash2, Cookie, Loader2, ShieldCheck, EyeOff, Receipt, Globe2, CalendarClock
+  Download, Trash2, Cookie, Loader2, ShieldCheck, EyeOff, Receipt, Globe2, CalendarClock, KeyRound
 } from 'lucide-react';
 import api from '../services/api';
 import { useStore } from '../store/useStore';
@@ -61,7 +61,7 @@ function Card({ title, icon: Icon, description, children, tone = 'normal' }: {
 export default function SettingsPage() {
   useDocumentTitle('Impostazioni');
   const navigate = useNavigate();
-  const { user, setAuthModalOpen, notify, logout, patchUser, features } = useStore();
+  const { user, setAuthModalOpen, notify, logout, patchUser, features, setToken } = useStore();
 
   const [exporting, setExporting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -71,6 +71,24 @@ export default function SettingsPage() {
   const [functional, setFunctional] = useState<boolean>(getConsent()?.functional ?? false);
   const [savingPref, setSavingPref] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<TransactionRow[] | null>(null);
+
+  /**
+   * Lo stato del cambio password sta QUI, sopra il ritorno anticipato.
+   *
+   * Era dichiarato più in basso, dopo `if (!user) return <EmptyState/>`. Non è
+   * una pignoleria del linter: React conta gli hook per posizione, quindi la
+   * pagina montava tre `useState` da autenticati e zero da anonimi. Bastava
+   * disconnettersi restando su questa schermata — cosa che si fa proprio da
+   * qui, il menu è due riquadri più giù — per cambiare il numero di hook fra un
+   * render e il successivo e far interrompere React con «Rendered fewer hooks
+   * than expected».
+   *
+   * `npm run verify` non esegue il lint, quindi la regola che lo dice era
+   * accesa e nessuno la stava ascoltando.
+   */
+  const [pwAttuale, setPwAttuale] = useState('');
+  const [pwNuova, setPwNuova] = useState('');
+  const [pwInCorso, setPwInCorso] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -93,6 +111,37 @@ export default function SettingsPage() {
   }
 
   /** Aggiorna una preferenza sul server e riallinea lo stato locale. */
+  /**
+   * Cambio password.
+   *
+   * L'endpoint `PATCH /auth/password` non aveva alcun comando nell'interfaccia,
+   * quindi l'unico modo di cambiare password era dichiararsi smemorati e fare
+   * il giro completo del recupero. Per un'operazione ordinaria — «uso questa
+   * password anche altrove e voglio cambiarla» — significava che quasi nessuno
+   * la faceva.
+   */
+  const cambiaPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwInCorso) return;
+
+    setPwInCorso(true);
+    try {
+      const res = await api.patch('/auth/password', {
+        currentPassword: pwAttuale,
+        newPassword: pwNuova
+      });
+      // Il server rilascia un token nuovo: senza raccoglierlo, chi cambia la
+      // password si disconnetterebbe da solo un istante dopo averlo fatto.
+      if (res.data?.token) setToken(res.data.token);
+      setPwAttuale('');
+      setPwNuova('');
+      notify('Password aggiornata. Gli altri dispositivi sono stati disconnessi.', 'success');
+    } catch (err: unknown) {
+      notify(errorMessage(err, 'Cambio password non riuscito.'), 'error');
+    }
+    setPwInCorso(false);
+  };
+
   const savePreference = async (key: string, payload: Record<string, unknown>, onOk: () => void) => {
     setSavingPref(key);
     try {
@@ -351,6 +400,54 @@ export default function SettingsPage() {
         )}
       </Card>
       )}
+
+      {/* --- Password ---------------------------------------------------------- */}
+      <Card
+        title="Password"
+        icon={KeyRound}
+        description="Cambiandola, le sessioni aperte sugli altri dispositivi vengono chiuse. Questo resta connesso."
+      >
+        <form onSubmit={cambiaPassword} className="space-y-3">
+          {/*
+            * Il campo del nome utente, nascosto, esiste per i gestori di
+            * password: senza, non sanno a quale account associare la nuova e
+            * offrono di salvarla come credenziale separata.
+            */}
+          <input type="text" name="username" autoComplete="username" value={user.username}
+                 readOnly hidden aria-hidden="true" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-ink-muted">Password attuale</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={pwAttuale}
+                onChange={(e) => setPwAttuale(e.target.value)}
+                className="w-full rounded-md border border-line-control bg-surface-sunken px-3 py-2 text-sm text-ink"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-ink-muted">Nuova password</span>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={pwNuova}
+                onChange={(e) => setPwNuova(e.target.value)}
+                className="w-full rounded-md border border-line-control bg-surface-sunken px-3 py-2 text-sm text-ink"
+              />
+            </label>
+          </div>
+          <p className="text-xs text-ink-dim">Almeno 8 caratteri, una maiuscola e un numero.</p>
+          <button
+            type="submit"
+            disabled={pwInCorso || !pwAttuale || !pwNuova}
+            className="btn-secondary flex items-center gap-2 rounded-xl px-4 py-2 text-sm disabled:opacity-40"
+          >
+            {pwInCorso && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            Cambia password
+          </button>
+        </form>
+      </Card>
 
       {/* --- Dati personali ---------------------------------------------------- */}
       <Card

@@ -173,14 +173,14 @@ export default {
 
       fontFamily: {
         /** L'attrezzatura, e la prosa: pulsanti, campi, etichette, messaggi. */
-        sans: ['"Schibsted Grotesk"', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        sans: ['"Schibsted Grotesk Variable"', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         /**
          * L'insegna. Archivo ha l'asse di LARGHEZZA variabile (`wdth`): la
          * compressione è un'impostazione, non un secondo file da scaricare.
          * Non è Bebas e non è Oswald, che sono il primo risultato di qualunque
          * generatore e si riconoscono a distanza.
          */
-        display: ['Archivo', 'Archivo Narrow', 'Helvetica Neue', 'sans-serif'],
+        display: ['"Archivo Variable"', 'Archivo', 'Archivo Narrow', 'Helvetica Neue', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
       },
 

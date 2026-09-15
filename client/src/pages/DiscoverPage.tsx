@@ -7,6 +7,7 @@ import CharacterCard from '../components/CharacterCard';
 import CharacterRow from '../components/CharacterRow';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { PageContainer } from '../components/ui/Page';
 
 // Le categorie sono quelle realmente accettate dal server, non etichette
 // decorative: prima Feed / Charms / Labs non filtravano nulla (S3-2, S3-3).
@@ -48,7 +49,7 @@ export default function DiscoverPage() {
     : CATEGORIES.find((c) => c.id === category)?.label ?? 'Personaggi';
 
   return (
-    <div className="mx-auto w-full max-w-[76rem] px-6 py-14 md:px-10 lg:px-14">
+    <PageContainer width="wide">
       {/**
         * Intestazione: due righe, non quattro.
         *
@@ -172,6 +173,6 @@ export default function DiscoverPage() {
           )}
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

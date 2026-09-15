@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "check:css": "node scripts/check-css-classes.mjs",
     "check:scale": "node scripts/check-scale.mjs",
-    "verify": "tsc && vite build && node scripts/check-css-classes.mjs && node scripts/check-contrast.mjs && node scripts/check-scale.mjs && vitest run",
+    "brand": "node scripts/build-brand-assets.mjs",
+    "verify": "tsc && eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 && vite build && node scripts/check-css-classes.mjs && node scripts/check-contrast.mjs && node scripts/check-scale.mjs && vitest run",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -18,6 +19,8 @@
     "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/schibsted-grotesk": "^5.3.0",
     "@sentry/react": "^10.71.0",
     "@stripe/react-stripe-js": "^6.8.2",
     "@stripe/stripe-js": "^9.14.0",

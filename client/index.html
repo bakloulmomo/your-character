@@ -2,9 +2,30 @@
 <html lang="it" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/jpeg" href="/favicon_logo.jpeg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#08080B" />
+
+    <!-- ICONE.
+
+         C'era una riga sola: un JPEG di 370 KB, quadrato, con la scacchiera di
+         trasparenza cotta dentro i pixel. Serviva da favicon, da anteprima
+         social e da marchio nella barra laterale — tre mestieri diversi svolti
+         male dallo stesso file, e ovunque comparisse portava con sé il
+         reticolo grigio che gli editor grafici disegnano per dire «qui non c'è
+         niente».
+
+         Ora il vettoriale è la sorgente e le rasterizzazioni le genera
+         `scripts/build-brand-assets.mjs` (`npm run brand`): non possono
+         restare indietro rispetto al marchio, perché non sono disegnate a mano.
+
+         L'SVG per primo: i browser che lo capiscono usano quello e ignorano il
+         resto, quindi la scheda è nitida a qualunque densità e il marchio si
+         adatta al tema chiaro o scuro della scheda stessa. Il PNG da 32 resta
+         per chi non lo capisce. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
 
     <title>your-character - Home</title>
     <!-- La descrizione precedente («minimale, ad alte prestazioni ed elevata
@@ -20,33 +41,41 @@
     <meta property="og:site_name" content="your-character" />
     <meta property="og:title" content="your-character" />
     <meta property="og:description" content="Crea un personaggio, dagli una personalità e conversaci." />
-    <meta property="og:image" content="/favicon_logo.jpeg" />
-    <meta name="twitter:card" content="summary" />
+    <!-- `og:url` e l'immagine ASSOLUTA: i social non risolvono i percorsi
+         relativi, quindi un `/og-image.png` finiva ignorato e l'anteprima
+         restava senza figura. L'host va allineato al dominio reale insieme a
+         `vercel.json`. -->
+    <meta property="og:url" content="https://your-character.app/" />
+    <meta property="og:image" content="https://your-character.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="your-character — Scegli con chi parlare" />
+    <meta property="og:locale" content="it_IT" />
+    <!-- `summary_large_image` e non `summary`: con l'anteprima quadrata il
+         link compariva come un francobollo accanto al testo. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="your-character" />
+    <meta name="twitter:description" content="Crea un personaggio, dagli una personalità e conversaci." />
+    <meta name="twitter:image" content="https://your-character.app/og-image.png" />
 
-    <!-- DUE CARATTERI, DUE MESTIERI.
+    <!-- DUE CARATTERI, DUE MESTIERI — e li ospitiamo noi.
 
          Archivo è l'INSEGNA: nomi di personaggi, titoli, il vertice della
          pagina. Ha l'asse di LARGHEZZA variabile (`wdth`), quindi la
          compressione tipografica è un'impostazione e non un secondo file da
          scaricare — ed è il motivo per cui non serve né Bebas né Oswald, che
-         sono il primo risultato di qualunque generatore e si riconoscono a
-         distanza.
+         sono il primo risultato di qualunque generatore.
 
          Schibsted Grotesk è l'ATTREZZATURA: pulsanti, campi, etichette,
-         metadati, e la prosa delle conversazioni. Resta da «Rivista», dove era
-         già la scelta giusta. Inter e Outfit erano la coppia predefinita di
-         ogni generatore: corrette, e identiche a quelle di chiunque altro.
+         metadati, e la prosa delle conversazioni.
 
-         Newsreader è uscito con il serif: era la voce di «Rivista», la voce di
-         «Notturno» è la locandina. Due famiglie prima, due dopo — il costo di
-         caricamento non cambia. `display=swap` e il precaricamento evitano che
-         il testo resti invisibile mentre arrivano. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+         Qui non c'è più alcun collegamento a `fonts.googleapis.com`. Quella
+         richiesta partiva dal browser dell'utente prima di qualunque consenso
+         e portava indirizzo IP, user-agent e referrer a un servizio negli
+         Stati Uniti: è la contestazione GDPR più facile da verificare
+         dall'esterno, basta aprire il pannello di rete. I caratteri ora sono
+         una dipendenza del progetto (`@fontsource-variable`), importati in
+         `src/index.css` e serviti dal nostro dominio. -->
   </head>
   <body class="min-h-screen overflow-x-hidden">
     <div id="root"></div>

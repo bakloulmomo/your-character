@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="your-character">
+  <title>your-character</title>
+  <!--
+    Due fumetti che si sovrappongono: una conversazione fra due voci, che è
+    esattamente ciò che il prodotto fa. Il concetto viene dal marchio
+    precedente ed è giusto; era l'esecuzione a non esserlo.
+
+    Il file di prima era un JPEG di 370 KB con la SCACCHIERA DI TRASPARENZA
+    cotta dentro i pixel — il quadrettato grigio che gli editor disegnano per
+    dire «qui non c'è niente» era diventato parte dell'immagine, e se lo
+    portava dietro ovunque comparisse: scheda del browser, anteprima social,
+    barra laterale.
+
+    Qui la trasparenza è vera, il peso è di due kilobyte, e il segno è
+    vettoriale: la stessa sorgente serve la scheda a 16 pixel e l'icona
+    dell'app a 512.
+
+    GEOMETRIA, e perché è questa. Le due bolle si scostano soprattutto in
+    ORIZZONTALE (26 unità) e poco in verticale (12): sovrapposte in diagonale
+    finivano una sopra l'altra e a sedici pixel diventavano una macchia. Le
+    code sono corte e puntano in fuori, così restano leggibili quando l'intero
+    marchio è alto quanto una lettera.
+
+    IL NEUTRO SI ADATTA AL TEMA. Una scheda del browser può avere fondo chiaro
+    o scuro, e un marchio a due colori fissi è invisibile su uno dei due. Il blu
+    resta il blu — è `accent.DEFAULT` del sistema di design, lo stesso di ogni
+    pulsante primario, e tiene su entrambi i fondi.
+  -->
+  <style>
+    .yc-neutro { stroke: #101014; }
+    @media (prefers-color-scheme: dark) {
+      .yc-neutro { stroke: #F4F4F7; }
+    }
+  </style>
+
+  <defs>
+    <!--
+      Il taglio che manda una bolla DAVANTI all'altra.
+      È il contorno della bolla in primo piano, ingrossato, che buca quella
+      dietro: senza, i due tratti si incrociano e a sedici pixel il disegno
+      diventa un groviglio. Lo spessore della maschera (12) è poco più del
+      doppio del tratto (5.5): lascia un filo di buio attorno, che è ciò che
+      l'occhio legge come «questa sta davanti».
+    -->
+    <mask id="yc-taglio">
+      <rect width="64" height="64" fill="#fff" />
+      <path
+        d="M48 48 H52 L56 57 L44 48 H40 A8 8 0 0 1 32 40 V34 A8 8 0 0 1 40 26 H52 A8 8 0 0 1 60 34 V40 A8 8 0 0 1 52 48 Z"
+        fill="none" stroke="#000" stroke-width="11" stroke-linejoin="round" />
+    </mask>
+  </defs>
+
+  <g fill="none" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Dietro: la voce del personaggio. -->
+    <path
+      d="M26 29 H18 L11 38 L15 29 H10 A8 8 0 0 1 2 21 V15 A8 8 0 0 1 10 7 H26 A8 8 0 0 1 34 15 V21 A8 8 0 0 1 26 29 Z"
+      stroke="#0D60FE" mask="url(#yc-taglio)" />
+    <!-- Davanti: la tua. -->
+    <path
+      d="M48 48 H52 L56 57 L44 48 H40 A8 8 0 0 1 32 40 V34 A8 8 0 0 1 40 26 H52 A8 8 0 0 1 60 34 V40 A8 8 0 0 1 52 48 Z"
+      class="yc-neutro" />
+  </g>
+</svg>

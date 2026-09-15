@@ -84,6 +84,14 @@ export interface UserProfile {
   dailyImageCount: number;
   role?: 'user' | 'moderator' | 'admin';
   isAdult?: boolean;
+  /**
+   * L'indirizzo e' stato confermato con il codice.
+   *
+   * Il server lo rimanda a ogni `/auth/me`, quindi non serve conservarlo
+   * altrove: e' lui la fonte, e una copia locale divergerebbe appena l'utente
+   * conferma da un'altra scheda.
+   */
+  emailVerified?: boolean;
   nsfwEnabled?: boolean;
   cookieConsent?: CookieConsentRecord | null;
   billingCountry?: string | null;
@@ -150,11 +158,11 @@ interface AppState {
   token: string | null;
   isAuthResolved: boolean;
   isAuthModalOpen: boolean;
-  authModalMode: 'login' | 'register';
+  authModalMode: 'login' | 'register' | 'verify';
   setUser: (user: UserProfile | null) => void;
   setToken: (token: string | null) => void;
   setAuthResolved: (resolved: boolean) => void;
-  setAuthModalOpen: (open: boolean, mode?: 'login' | 'register') => void;
+  setAuthModalOpen: (open: boolean, mode?: 'login' | 'register' | 'verify') => void;
   logout: () => Promise<void>;
   updateCredits: (credits: number) => void;
   patchUser: (patch: Partial<UserProfile>) => void;
@@ -174,6 +182,17 @@ interface AppState {
   setChatsLoadedFor: (key: string | null) => void;
   setChats: (chats: Chat[]) => void;
   setChatsStatus: (status: 'idle' | 'loading' | 'ready' | 'error') => void;
+  /**
+   * Continuazione della cronologia.
+   *
+   * Il server restituisce le trenta conversazioni più recenti e manda il
+   * seguito in `X-Has-More` / `X-Next-Cursor`. Finché il client non li leggeva,
+   * chi aveva più di trenta conversazioni non poteva più raggiungere le altre
+   * dall'interfaccia: esistevano, erano ordinate, ed erano irraggiungibili.
+   */
+  chatsCursor: string | null;
+  chatsHasMore: boolean;
+  appendChats: (chats: Chat[], cursor: string | null, hasMore: boolean) => void;
   upsertChat: (chat: Chat) => void;
   removeChat: (chatId: string) => void;
 
@@ -299,7 +318,7 @@ export const useStore = create<AppState>((set, get) => ({
     // Il cookie viene cancellato dal server, che e' l'unico a poterlo fare:
     // e' httpOnly. Qui si ripulisce solo lo stato in memoria.
     setAuthToken(null);
-    set({ user: null, token: null, chats: [], chatsStatus: 'idle', chatsLoadedFor: null });
+    set({ user: null, token: null, chats: [], chatsStatus: 'idle', chatsLoadedFor: null, chatsCursor: null, chatsHasMore: false });
   },
 
   updateCredits: (credits) =>
@@ -313,6 +332,15 @@ export const useStore = create<AppState>((set, get) => ({
   setChatsLoadedFor: (chatsLoadedFor) => set({ chatsLoadedFor }),
   setChats: (chats) => set({ chats }),
   setChatsStatus: (chatsStatus) => set({ chatsStatus }),
+  chatsCursor: null,
+  chatsHasMore: false,
+  appendChats: (nuove, chatsCursor, chatsHasMore) =>
+    set((s) => {
+      // Deduplica per identificativo: una conversazione che riceve un messaggio
+      // mentre si sfoglia risale in cima e ricomparirebbe nella pagina dopo.
+      const gia = new Set(s.chats.map((c) => c._id));
+      return { chats: [...s.chats, ...nuove.filter((c) => !gia.has(c._id))], chatsCursor, chatsHasMore };
+    }),
   upsertChat: (chat) =>
     set((s) => {
       const rest = s.chats.filter((c) => c._id !== chat._id);

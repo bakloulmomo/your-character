@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import ConfirmDialog from './ui/ConfirmDialog';
+import EmailVerificationBanner from './EmailVerificationBanner';
 import Toaster from './ui/Toaster';
 import AuthModal from './AuthModal';
 import BuyCreditsModal from './BuyCreditsModal';
@@ -74,6 +75,10 @@ export default function AppShell() {
           </button>
           <span className="font-display text-sm font-bold">your-character</span>
         </header>
+
+        {/* Sopra il contenuto e sotto la barra: si vede su ogni pagina senza
+            coprire nulla, e scorre via leggendo invece di restare appiccicata. */}
+        <EmailVerificationBanner />
 
         {/* `tabIndex={-1}` rende il contenitore un bersaglio valido per il
             salto: senza, il focus resterebbe sul link e la tabulazione

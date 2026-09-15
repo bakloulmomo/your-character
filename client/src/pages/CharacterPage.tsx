@@ -42,7 +42,7 @@ export default function CharacterPage() {
         icon={<UserX className="h-7 w-7" />}
         title="Personaggio non trovato"
         description="Potrebbe essere stato eliminato, oppure è privato e appartiene a qualcun altro."
-        action={<Link to="/" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
+        action={<Link to="/discover" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
       />
     );
   }
