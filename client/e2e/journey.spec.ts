@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { unique, sidebar, registraEConferma } from './aiuti';
 
 /**
  * FASE E — Il percorso completo, in un browser vero (punto 3 del piano).
@@ -17,28 +18,6 @@ import { test, expect, type Page } from '@playwright/test';
  * dall'interfaccia — cioè non verificare più il percorso reale.
  */
 
-const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-/**
- * La barra laterale. Le asserzioni sul saldo vanno ancorate qui: lo stesso
- * testo compare anche nella pagina del profilo, e un selettore ambiguo
- * fallisce per il motivo sbagliato.
- */
-const sidebar = (page: Page) => page.getByRole('complementary', { name: 'Navigazione principale' });
-
-async function register(page: Page, email: string, username: string) {
-  await page.getByRole('button', { name: 'Registrati' }).click();
-
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Nome utente').fill(username);
-  await page.getByLabel('Password', { exact: true }).fill('Password1');
-  await page.getByLabel('Giorno').selectOption('14');
-  await page.getByLabel('Mese').selectOption('2');
-  await page.getByLabel('Anno').selectOption('1995');
-
-  await page.getByRole('button', { name: 'Crea account' }).click();
-}
-
 /** Invia un messaggio e attende che il turno si chiuda. */
 async function sendMessage(page: Page, text: string) {
   const field = page.getByPlaceholder(/^Scrivi a /);
@@ -52,12 +31,11 @@ test('percorso completo: dalla registrazione all\'eliminazione dell\'account', a
   const username = `viaggio_${id}`;
 
   // ── 1. Esplora ─────────────────────────────────────────────────────────────
-  await page.goto('/');
+  await page.goto('/discover');
   await expect(page.getByRole('main').getByRole('link', { name: /Aria Thorne/ }).first()).toBeVisible();
 
   // ── 2. Registrazione ───────────────────────────────────────────────────────
-  await register(page, email, username);
-  await expect(sidebar(page).getByText(`@${username}`)).toBeVisible();
+  await registraEConferma(page, email, username);
   await expect(sidebar(page).getByText('10 crediti')).toBeVisible();
 
   // ── 3. Ricerca: il campo che prima non filtrava nulla (S3-1) ───────────────
@@ -115,7 +93,7 @@ test('percorso completo: dalla registrazione all\'eliminazione dell\'account', a
   await expect(sidebar(page).getByText('149 crediti')).toBeVisible();
 
   // ── 10. La cronologia esiste e la conversazione è riapribile (S3-6) ────────
-  await page.goto('/');
+  await page.goto('/discover');
   const historyLink = sidebar(page).getByRole('link', { name: /Marcus Vance/ }).first();
   await expect(historyLink).toBeVisible();
   await historyLink.click();

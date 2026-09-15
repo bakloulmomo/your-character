@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { unique, sidebar, registraEConferma } from './aiuti';
 
 /**
  * Le conferme prima di ciò che non si annulla.
@@ -14,27 +15,12 @@ import { test, expect, type Page } from '@playwright/test';
  * si dimentica di provare, ed è quella che protegge.
  */
 
-const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const sidebar = (page: Page) => page.getByRole('complementary', { name: 'Navigazione principale' });
-
-async function register(page: Page, email: string, username: string) {
-  await page.getByRole('button', { name: 'Registrati' }).click();
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Nome utente').fill(username);
-  await page.getByLabel('Password', { exact: true }).fill('Password1');
-  await page.getByLabel('Giorno').selectOption('14');
-  await page.getByLabel('Mese').selectOption('2');
-  await page.getByLabel('Anno').selectOption('1995');
-  await page.getByRole('button', { name: 'Crea account' }).click();
-}
-
 test('eliminare un messaggio chiede conferma, e rinunciare non elimina niente', async ({ page }) => {
   const id = unique();
   const testo = `Un messaggio da eliminare ${id}`;
 
-  await page.goto('/');
-  await register(page, `conferma-${id}@e2e.test`, `conferma_${id}`);
-  await expect(sidebar(page).getByText(`@conferma_${id}`)).toBeVisible();
+  await page.goto('/discover');
+  await registraEConferma(page, `conferma-${id}@e2e.test`, `conferma_${id}`);
 
   // Una conversazione con un personaggio del catalogo.
   await page.goto('/character/650000000000000000000001');
@@ -85,9 +71,8 @@ test('disconnettersi chiede conferma, e non è dipinto di rosso', async ({ page 
   const id = unique();
   const username = `uscita_${id}`;
 
-  await page.goto('/');
-  await register(page, `uscita-${id}@e2e.test`, username);
-  await expect(sidebar(page).getByText(`@${username}`)).toBeVisible();
+  await page.goto('/discover');
+  await registraEConferma(page, `uscita-${id}@e2e.test`, username);
 
   await page.getByRole('button', { name: new RegExp(`@${username}`) }).click();
   await page.getByRole('menuitem', { name: /Disconnetti/ }).click();

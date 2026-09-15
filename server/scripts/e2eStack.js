@@ -60,6 +60,21 @@ async function main() {
   // Risposte deterministiche e fatturabili: servono a verificare l'economia dei
   // crediti (esaurimento → acquisto → ripresa) senza chiamare un modello vero.
   process.env.AI_MODE = process.env.AI_MODE || 'stub';
+  /**
+   * La casella di posta di sviluppo, accesa qui e solo qui.
+   *
+   * Senza trasporto email la conferma dell'indirizzo è impercorribile: il
+   * codice esiste solo come impronta SHA-256, quindi non si recupera nemmeno
+   * dal database. Da quando `requireVerifiedEmail` protegge messaggi, chat e
+   * personaggi, questo ha fermato cinque percorsi su nove — registrarsi
+   * funzionava, e da lì in poi niente.
+   *
+   * L'alternativa era una scorciatoia che salta la verifica nei test. Sarebbe
+   * stata più rapida e avrebbe verificato un prodotto che non esiste: con la
+   * casella i test attraversano lo stesso cancello di un utente vero, modulo
+   * del codice compreso.
+   */
+  process.env.DEV_OUTBOX = '1';
   // Recapito di ripiego per le notifiche allo staff. NON concede alcun ruolo:
   // l'account di moderazione viene seminato più sotto con il ruolo già scritto,
   // che è esattamente il percorso reale (`scripts/grantRole.js`, fuori banda).

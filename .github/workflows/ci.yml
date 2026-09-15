@@ -73,6 +73,13 @@ jobs:
         # attraverso `express.urlencoded({extended:true})` — cioè esattamente
         # l'impostazione da cui passa l'iniezione di operatori nella
         # querystring. Risolte con un `override` in package.json.
+        #
+        # Il secondo `override` è `js-yaml`, raggiunto SOLO in sviluppo
+        # (`jest → babel-plugin-istanbul → @istanbuljs/load-nyc-config`) e
+        # quindi mai in esecuzione su un server. Non è stato escluso con
+        # `--omit=dev`: una vulnerabilità che gira sulla macchina di chi
+        # sviluppa e sui runner della CI resta una vulnerabilità, e la soglia
+        # serve proprio a non lasciar decidere caso per caso se ignorarla.
         run: npm audit --audit-level=moderate
 
   client:

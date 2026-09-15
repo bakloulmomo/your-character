@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { unique, sidebar, registraEConferma } from './aiuti';
 
 /**
  * FASE E — Moderazione e revisione, viste dal browser.
@@ -9,22 +10,6 @@ import { test, expect, type Page } from '@playwright/test';
  * che un moderatore riesca ad approvarlo, e che un contenuto vietato venga
  * fermato con una spiegazione invece che con un errore generico.
  */
-
-const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-const sidebar = (page: Page) => page.getByRole('complementary', { name: 'Navigazione principale' });
-
-async function register(page: Page, email: string, username: string) {
-  await sidebar(page).getByRole('button', { name: 'Registrati' }).click();
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Nome utente').fill(username);
-  await page.getByLabel('Password', { exact: true }).fill('Password1');
-  await page.getByLabel('Giorno').selectOption('1');
-  await page.getByLabel('Mese').selectOption('0');
-  await page.getByLabel('Anno').selectOption('1990');
-  await page.getByRole('button', { name: 'Crea account' }).click();
-  await expect(sidebar(page).getByText(`@${username}`)).toBeVisible();
-}
 
 async function login(page: Page, email: string) {
   /**
@@ -49,14 +34,14 @@ async function login(page: Page, email: string) {
 
 /** Lo staff esiste una volta sola per ambiente: alla seconda esecuzione si accede. */
 async function signInAsStaff(page: Page) {
-  await page.goto('/');
+  await page.goto('/discover');
   const alreadyRegistered = await page
     .request.post('/api/auth/login', { data: { email: 'staff@e2e.test', password: 'Password1' } })
     .then((r) => r.ok())
     .catch(() => false);
 
   if (alreadyRegistered) await login(page, 'staff@e2e.test');
-  else await register(page, 'staff@e2e.test', 'staff');
+  else await registraEConferma(page, 'staff@e2e.test', 'staff', { apriDa: 'sidebar' });
 
   await expect(sidebar(page).getByRole('link', { name: 'Moderazione' })).toBeVisible();
 }
@@ -89,8 +74,8 @@ test.describe('moderazione', () => {
      */
 
     // ── L'autore pubblica ────────────────────────────────────────────────────
-    await page.goto('/');
-    await register(page, `autore-${id}@e2e.test`, `autore_${id}`);
+    await page.goto('/discover');
+    await registraEConferma(page, `autore-${id}@e2e.test`, `autore_${id}`, { apriDa: 'sidebar' });
     await createPublicCharacter(page, name);
 
     // ── L'autore lo trova subito, senza etichette di attesa ──────────────────
@@ -107,8 +92,8 @@ test.describe('moderazione', () => {
     await expect(cerca().first()).toBeVisible();
 
     // ── Un utente REGISTRATO ORA lo trova ───────────────────────────────────
-    await page.goto('/');
-    await register(page, `lettore-${id}@e2e.test`, `lettore_${id}`);
+    await page.goto('/discover');
+    await registraEConferma(page, `lettore-${id}@e2e.test`, `lettore_${id}`, { apriDa: 'sidebar' });
     await page.goto(`/search?q=${encodeURIComponent(name)}`);
     await expect(cerca().first()).toBeVisible();
 
@@ -137,8 +122,8 @@ test.describe('moderazione', () => {
   test('un messaggio vietato viene fermato spiegando quale regola è scattata', async ({ page }) => {
     const id = unique();
 
-    await page.goto('/');
-    await register(page, `utente-${id}@e2e.test`, `utente_${id}`);
+    await page.goto('/discover');
+    await registraEConferma(page, `utente-${id}@e2e.test`, `utente_${id}`, { apriDa: 'sidebar' });
 
     await page.goto('/character/650000000000000000000001');
     await page.getByRole('button', { name: 'Nuova conversazione' }).click();
