@@ -35,6 +35,7 @@ describe('AI Chat Engine & Memory Context Integration Tests', () => {
     ]);
 
     testUser = await User.create({
+    emailVerifiedAt: new Date(),
       clerkId: 'clerk_chat_user_1',
       email: 'chatuser@example.com',
       username: 'chatuser',
@@ -172,6 +173,7 @@ describe('AI Chat Engine & Memory Context Integration Tests', () => {
 
   it('should revert an expired subscription to free on activity (subscription expiry)', async () => {
     const expUser = await User.create({
+    emailVerifiedAt: new Date(),
       clerkId: 'clerk_expired_sub',
       email: 'expired@example.com',
       username: 'expireduser',
@@ -199,6 +201,7 @@ describe('AI Chat Engine & Memory Context Integration Tests', () => {
 
   it('should roll over daily message counter for subscription users after a new day (A4)', async () => {
     const subUser = await User.create({
+    emailVerifiedAt: new Date(),
       clerkId: 'clerk_sub_daily',
       email: 'subdaily@example.com',
       username: 'subdaily',

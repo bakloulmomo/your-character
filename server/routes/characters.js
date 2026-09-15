@@ -6,8 +6,9 @@ const { createCharacterSchema, isValidObjectId } = require('../utils/validation'
 const Character = require('../models/Character');
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
-const { createCharacterLimiter } = require('../middleware/rateLimit');
+const { createCharacterLimiter, searchGuard } = require('../middleware/rateLimit');
 const { moderateCharacterProfile } = require('../services/moderationService');
+const { requireVerifiedEmail } = require('../middleware/requireVerifiedEmail');
 const { recordViolation } = require('../services/moderationLog');
 
 const { serverFailure } = require('../services/failure');
@@ -49,7 +50,7 @@ const { isOwner, isCharacterVisible: canView, VISIBLE_TO_OTHERS } = require('../
 const canSeeNSFW = (user) => !!user && typeof user.canSeeNSFW === 'function' && user.canSeeNSFW();
 
 // GET /api/characters - List public characters with category filter, search, and pagination
-router.get('/', attachUser, async (req, res) => {
+router.get('/', attachUser, searchGuard, async (req, res) => {
   try {
     /**
      * Ogni parametro passa da `String()` PRIMA di toccare il filtro (S5).
@@ -102,7 +103,16 @@ router.get('/', attachUser, async (req, res) => {
       filter.tags = tag.toLowerCase();
     }
 
-    if (search && search.trim().length > 0) {
+    /**
+     * Almeno due caratteri.
+     *
+     * Con uno solo la `$regex` combacia con quasi tutto: la scansione completa
+     * c'e' comunque, e restituisce l'intero catalogo — cioe' il costo massimo
+     * per il risultato meno utile che esista. Sotto la soglia si ignora il
+     * termine invece di rifiutare: chi ha appena digitato la prima lettera sta
+     * ancora scrivendo, non ha sbagliato.
+     */
+    if (search && search.trim().length >= 2) {
       // Ricerca per sottostringa, non `$text`. Due ragioni:
       //  1. `$text` richiede un indice testuale già costruito: sulla prima
       //     ricerca di un database nuovo falliva con 500.
@@ -236,7 +246,7 @@ const visibilityFor = (character) =>
   character.moderationStatus === 'rejected' ? 'rejected' : 'approved';
 
 // POST /api/characters - Create a new custom character
-router.post('/', requireAuth, createCharacterLimiter, validate(createCharacterSchema), async (req, res) => {
+router.post('/', requireAuth, requireVerifiedEmail, createCharacterLimiter, validate(createCharacterSchema), async (req, res) => {
   try {
     if (!(await screenProfile(req.body, req.user, res))) return;
 

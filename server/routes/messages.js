@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { requireVerifiedEmail } = require('../middleware/requireVerifiedEmail');
 const { validate } = require('../middleware/validate');
 const { sendMessageSchema, isValidObjectId } = require('../utils/validation');
 const Chat = require('../models/Chat');
@@ -65,7 +66,7 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
 // POST /api/messages - Invia un messaggio e riceve la risposta del personaggio
-router.post('/', requireAuth, messageLimiter, validate(sendMessageSchema), async (req, res) => {
+router.post('/', requireAuth, requireVerifiedEmail, messageLimiter, validate(sendMessageSchema), async (req, res) => {
   const { chatId, content } = req.body;
   const userId = req.user._id;
   let reservation = null;
@@ -244,7 +245,7 @@ router.post('/', requireAuth, messageLimiter, validate(sendMessageSchema), async
  * Stessa contabilità della rotta non-streaming: riserva prima, rimborso in caso
  * di guasto. Cambia solo il modo in cui la risposta raggiunge il client.
  */
-router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema), async (req, res) => {
+router.post('/stream', requireAuth, requireVerifiedEmail, messageLimiter, validate(sendMessageSchema), async (req, res) => {
   const { chatId, content } = req.body;
   const userId = req.user._id;
   let reservation = null;
@@ -459,7 +460,7 @@ router.post('/stream', requireAuth, messageLimiter, validate(sendMessageSchema),
  * contesto. È una delle azioni che nell'interfaccia di riferimento sono sempre
  * disponibili sul messaggio e qui non esistevano affatto (S3-14).
  */
-router.post('/regenerate', requireAuth, messageLimiter, async (req, res) => {
+router.post('/regenerate', requireAuth, requireVerifiedEmail, messageLimiter, async (req, res) => {
   const { chatId } = req.body;
   const userId = req.user._id;
   let reservation = null;

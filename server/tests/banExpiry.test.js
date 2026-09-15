@@ -25,6 +25,7 @@ const giorniFa = (n) => new Date(Date.now() - n * 24 * 3600 * 1000);
 const giorniAvanti = (n) => new Date(Date.now() + n * 24 * 3600 * 1000);
 
 const creaUtente = (extra) => User.create({
+    emailVerifiedAt: new Date(),
   email: 'sospeso@example.com', username: 'sospeso', authProvider: 'local',
   birthdate: new Date('1990-01-01'), ...extra
 });

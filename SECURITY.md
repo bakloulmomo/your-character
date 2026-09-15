@@ -202,7 +202,19 @@ Verificato dai test, non dichiarato: 320 test lato server, 90 lato client,
 - **Sessioni** — JWT firmato HS256 in cookie `httpOnly` + `Secure` + `SameSite=Lax`,
   token in memoria e mai in `localStorage`, revoca reale via `tokenVersion`.
 - **Ingresso** — nessun privilegio deriva da un dato fornito dall'utente; il
-  ruolo si concede solo fuori banda; la beta è chiusa da un codice d'invito.
+  ruolo si concede solo fuori banda; la beta è chiusa da un codice d'invito;
+  l'indirizzo email è confermato con un codice prima di poter scrivere, creare
+  o pagare.
+- **Querystring** — parser `simple`: `?campo[$ne]=x` arriva come stringa, quindi
+  un operatore Mongo non può entrare in un filtro da nessuna rotta, non solo da
+  quelle che se ne ricordano.
+- **Corpi** — solo JSON: `express.urlencoded` non è montato, e la sua assenza è
+  ciò che chiude il vettore CSRF classico (un `<form>` cross-origin non può
+  produrre un corpo JSON).
+- **Tenuta** — `/health` controlla davvero la connessione al database e risponde
+  503 quando manca; `SIGTERM` lascia finire le richieste in volo prima di
+  chiudere; le scadenze promesse nell'informativa sono applicate da un job
+  (`services/retention.js`), non solo dichiarate.
 - **Limiti** — undici limitatori distinti, per utente quando c'è un utente e per
   subnet IP altrimenti, con `trust proxy` a un solo salto.
 - **Denaro** — firma del webhook obbligatoria in ogni ambiente, senza rami
@@ -243,14 +255,14 @@ l'unico modo per non dimenticarlo.
 
 | Manca | Rischio oggi | Quando diventa non più accettabile |
 |---|---|---|
-| **Verifica dell'email** | Ci si registra con l'indirizzo di terzi; nessun privilegio ne deriva più, ma il recupero password manda email non richieste | Prima di aprire le registrazioni al pubblico |
+| ~~**Verifica dell'email**~~ | **Fatto.** Codice a sei cifre, impronta SHA-256, cinque tentativi, quindici minuti. Senza conferma non si scrive, non si creano personaggi, non si compra. Gli account mai confermati si cancellano da soli dopo sette giorni | — |
 | **Token CSRF** | Basso: `SameSite=Lax` + API same-origin + corpi JSON coprono i casi pratici | Se una rotta di modifica diventasse raggiungibile con `GET` o con un form |
 | **2FA** | Un account compromesso è compromesso | Quando esisteranno account con contenuti che le persone non possono ricreare |
-| **Sessione di 7 giorni senza rotazione** | Un token rubato vale una settimana | Prima di gestire pagamenti ricorrenti su larga scala |
-| **Backup del database** | **Nessuno.** Su Atlas M0 non ci sono backup automatici: una cancellazione accidentale è definitiva | **Subito, appena esistono dati di utenti veri.** È il debito più grave dell'elenco |
+| ~~**Sessione di 7 giorni senza rotazione**~~ | **Ridotto.** Due giorni invece di sette, con ri-emissione silenziosa sotto le dodici ore residue: chi torna spesso non se ne accorge, chi si è fatto rubare il token ha una finestra tre volte più stretta. Durata, firma, cookie e rinnovo stanno in un posto solo (`server/services/session.js`) | Resta la revoca immediata: oggi un token rubato vale fino a due giorni, a meno di incrementare `tokenVersion` a mano |
+| **Backup del database** | Copia notturna cifrata via GitHub Actions (`.github/workflows/backup.yml`), retention 30 giorni. Resta un ripiego: granularità 24 ore, e la chiave vive nei segreti del repository | Passare agli snapshot gestiti di Atlas quando i dati valgono più di 10 €/mese. **E il ripristino di prova va eseguito davvero**: finché la tabella in `DEPLOY.md` è vuota, questo backup non è dimostrato |
 | **Limitatori in memoria** | Corretto su un'istanza sola; scalando in orizzontale il limite effettivo si moltiplica per il numero di istanze | Al primo passaggio a più di un'istanza |
 | **`0.0.0.0/0` su Atlas** | La rete non filtra: proteggono solo le credenziali | Quando l'hosting offrirà IP in uscita stabili |
-| **Nessun avviso automatico** | Un abuso si scopre guardando | Appena il servizio ha utenti che se ne accorgerebbero prima di noi |
+| **Nessun avviso automatico** | Un abuso si scopre guardando. Le email non recapitate ora almeno si contano (`mail.failed` in `/api/admin/metrics`) invece di sparire | Appena il servizio ha utenti che se ne accorgerebbero prima di noi |
 | **Nessun monitoraggio di disponibilità** | Un servizio fermo si scopre da una segnalazione | Come sopra |
 | **Rotazione periodica delle chiavi** | Le chiavi restano valide finché qualcuno non le cambia a mano | Con più di una persona ad avere accesso alla produzione |
 | **Percorso di pagamento con carta mai eseguito da capo a fondo** | Il codice c'è e i test lo coprono, ma nessuna carta vera ci è mai passata | Prima di accendere `FEATURE_PAYMENTS` |

@@ -45,7 +45,8 @@ describe('FASE B — Integrità economica sotto concorrenza', () => {
   beforeEach(async () => {
     await Promise.all([User.deleteMany({}), Character.deleteMany({}), Chat.deleteMany({}), Message.deleteMany({})]);
 
-    user = await User.create({ clerkId: CLERK, email: 'conc@example.com', username: 'concurrent', credits: 5 });
+    user = await User.create({
+    emailVerifiedAt: new Date(), clerkId: CLERK, email: 'conc@example.com', username: 'concurrent', credits: 5 });
     character = await Character.create({
       name: 'Sfidante',
       description: 'Personaggio usato per i test di concorrenza sui crediti.',

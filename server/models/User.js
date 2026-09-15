@@ -157,6 +157,73 @@ const userSchema = new mongoose.Schema({
     default: null
   },
 
+  /**
+   * Verifica dell'indirizzo email.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * Prima non esisteva, e il codice lo diceva apertamente in `routes/auth.js`:
+   * «L'email, qui, non e' un'identita' — e' una stringa che il richiedente
+   * sceglie». Due conseguenze concrete: ci si registrava con l'indirizzo di
+   * un'altra persona, e `POST /forgot-password` mandava a quella persona posta
+   * che non aveva chiesto.
+   *
+   * Si conserva solo l'IMPRONTA del codice, come per i token di recupero: chi
+   * leggesse il database non potrebbe confermare un indirizzo altrui. Il codice
+   * a sei cifre e' abbastanza corto da riscriverlo a mano da un telefono e
+   * abbastanza protetto dal tetto di tentativi: un milione di combinazioni con
+   * cinque prove e quindici minuti di validita' rendono la forza bruta inutile
+   * senza allungare il codice fino a farlo incollare.
+   * ───────────────────────────────────────────────────────────────────────────
+   */
+  emailVerifiedAt: {
+    type: Date,
+    default: null,
+    index: true
+  },
+  emailVerificationCodeHash: {
+    type: String,
+    default: null,
+    select: false
+  },
+  emailVerificationExpiresAt: {
+    type: Date,
+    default: null,
+    select: false
+  },
+  /**
+   * Tentativi falliti sul codice corrente. Si azzera a ogni nuovo invio: e' il
+   * tetto per codice, non per account — altrimenti un utente che sbaglia a
+   * digitare tre volte resterebbe chiuso fuori per sempre.
+   */
+  emailVerificationAttempts: {
+    type: Number,
+    default: 0,
+    select: false
+  },
+  emailVerificationSentAt: {
+    type: Date,
+    default: null,
+    select: false
+  },
+  /**
+   * Quando questo account scade se non viene mai confermato.
+   *
+   * E' l'UNICO campo di questo schema con un indice TTL, e la distinzione e'
+   * quella che rende il TTL sicuro: un indice TTL cancella il DOCUMENTO, non il
+   * campo. Legarlo a `passwordResetExpiresAt` cancellerebbe l'account un'ora
+   * dopo aver chiesto di recuperare la password — qui invece la scadenza del
+   * campo coincide davvero con la fine di cio' che il documento rappresenta.
+   *
+   * Serve a non lasciare occupato per sempre l'indirizzo di un'altra persona:
+   * chi si registra con l'email di qualcun altro e non puo' confermarla libera
+   * quell'indirizzo dopo sette giorni. Diventa `null` alla conferma, e un
+   * documento con il campo nullo il TTL non lo tocca.
+   */
+  unverifiedExpiresAt: {
+    type: Date,
+    default: null
+  },
+
   // Recupero password: si conserva solo l'impronta del token, mai il token in
   // chiaro — chi leggesse il database non potrebbe usarlo per entrare.
   passwordResetTokenHash: {
@@ -169,6 +236,41 @@ const userSchema = new mongoose.Schema({
     index: true
   },
   passwordResetExpiresAt: {
+    type: Date,
+    default: null,
+    select: false
+  },
+
+  /**
+   * Tentativi di accesso falliti CONSECUTIVI, e blocco temporaneo.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * Il limitatore su `/login` conta per INDIRIZZO IP: cinque tentativi ogni
+   * quindici minuti. Protegge bene dal singolo attaccante e per niente da uno
+   * distribuito — con mille indirizzi diventano cinquemila tentativi ogni
+   * quindici minuti contro un singolo account, e nessuno dei due limiti se ne
+   * accorge perche' ciascun IP resta sotto la propria soglia. Il conto qui e'
+   * per ACCOUNT, cioe' sull'asse che l'attacco sta davvero percorrendo.
+   *
+   * IL COMPROMESSO, DETTO APERTAMENTE. Un blocco per account e' anche un modo
+   * per impedire a una persona di entrare: chi conosce l'indirizzo di qualcuno
+   * puo' sbagliare la password apposta e tenerlo fuori. Per questo il blocco e'
+   * BREVE (quindici minuti) e non progressivo all'infinito: costa a un
+   * attaccante il 99% del suo ritmo, e alla vittima un'attesa. Un blocco che
+   * richiede l'intervento di un amministratore sarebbe una difesa peggiore del
+   * problema.
+   *
+   * E il messaggio d'errore resta identico a quello di una password sbagliata:
+   * chi tenta non deve poter distinguere «bloccato» da «errata», altrimenti il
+   * blocco stesso diventa un oracolo che conferma quali account esistono.
+   * ───────────────────────────────────────────────────────────────────────────
+   */
+  failedLoginAttempts: {
+    type: Number,
+    default: 0,
+    select: false
+  },
+  lockedUntil: {
     type: Date,
     default: null,
     select: false
@@ -207,6 +309,17 @@ const userSchema = new mongoose.Schema({
 // Indexes
 userSchema.index({ subscription: 1, subscriptionExpiresAt: 1 });
 
+/**
+ * Scadenza degli account mai confermati.
+ *
+ * `expireAfterSeconds: 0` significa «cancella quando la data nel campo e'
+ * passata», non «cancella subito»: la scadenza la decide il documento. I
+ * documenti in cui il campo e' `null` — cioe' tutti gli account confermati —
+ * il TTL li ignora, ed e' questo che rende sicuro un indice che altrimenti
+ * cancellerebbe utenti veri.
+ */
+userSchema.index({ unverifiedExpiresAt: 1 }, { expireAfterSeconds: 0 });
+
 userSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
@@ -225,6 +338,18 @@ const DAILY_LIMITS = {
 const limitsFor = (subscription) => DAILY_LIMITS[subscription] || null;
 
 // Helper Methods
+/**
+ * L'indirizzo e' stato confermato.
+ *
+ * Fallisce chiuso come `isAdult()`: senza data di conferma la risposta e' no.
+ * Gli account creati prima che la verifica esistesse vengono confermati d'ufficio
+ * da `scripts/grandfatherVerified.js` — una decisione presa una volta e
+ * annotata, non un'eccezione che vive nel codice per sempre.
+ */
+userSchema.methods.isEmailVerified = function() {
+  return !!this.emailVerifiedAt;
+};
+
 /**
  * Maggiore età calcolata dalla data di nascita dichiarata.
  * Se la data manca, la risposta è NO: l'assenza del dato non può valere come

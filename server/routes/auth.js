@@ -1,18 +1,40 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { sendMail } = require('../services/mailService');
+const { issueVerificationCode, verifyCode, MAX_ATTEMPTS } = require('../services/emailVerification');
 const { requireAuth, attachUser } = require('../middleware/auth');
-const { jwtSecret, isProduction, welcomeCredits, betaInviteCode, features } = require('../config/env');
+const { welcomeCredits, betaInviteCode, features } = require('../config/env');
 const { serverFailure, warnFailure } = require('../services/failure');
+const { applyBanExpiry } = require('../utils/time');
+const { passwordSchema } = require('../utils/validation');
+const { signSession, setSessionCookie, clearSessionCookie } = require('../services/session');
 
-const getJwtSecret = () => jwtSecret();
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+/**
+ * Durata della sessione, e perché è scesa da sette giorni a due.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Un token rubato vale finché non scade: con sette giorni fissi e nessuna
+ * rotazione, chi lo intercetta ha una settimana intera. Il numero non era stato
+ * scelto misurando qualcosa — era il default che si scrive senza pensarci.
+ *
+ * Due giorni con RI-EMISSIONE SILENZIOSA (vedi `refreshSessionIfStale`) danno
+ * la stessa esperienza a chi usa il prodotto — chi torna entro due giorni non
+ * si accorge di nulla, e ogni visita sposta in avanti la scadenza — ma
+ * riducono a un quinto la finestra utile di un token sottratto a un utente che
+ * ha smesso di usarlo.
+ *
+ * `SESSION_MAX_AGE_MS` deve restare coerente con `SESSION_TTL`: sono la stessa
+ * durata detta al browser e dentro al token, e divergere significherebbe un
+ * cookie che sopravvive a un token morto (o viceversa).
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
 
 /**
  * Limiti di frequenza su accesso e registrazione.
@@ -83,10 +105,9 @@ const registerSchema = z.object({
     .min(3, 'Lo username deve contenere almeno 3 caratteri')
     .max(30, 'Lo username può contenere al massimo 30 caratteri')
     .regex(/^[a-zA-Z0-9_]+$/, 'Lo username può contenere solo lettere, numeri e underscore'),
-  password: z.string()
-    .min(8, 'La password deve contenere almeno 8 caratteri')
-    .regex(/[A-Z]/, 'La password deve contenere almeno una lettera maiuscola')
-    .regex(/[0-9]/, 'La password deve contenere almeno un numero'),
+  // Regole in `utils/validation.js`: erano scritte a mano qui e in altri tre
+  // posti, e quattro copie della stessa regola non restano uguali.
+  password: passwordSchema,
   // Age verification is mandatory (18+ policy). Reject invalid or under-age dates.
   birthdate: z.string()
     .refine((s) => !Number.isNaN(Date.parse(s)), 'Data di nascita non valida')
@@ -111,22 +132,15 @@ const loginSchema = z.object({
   password: z.string().min(1, 'La password è richiesta')
 });
 
-// Helper to generate JWT Token
-const generateToken = (user) => {
-  return jwt.sign(
-    // `tv` è la versione della sessione: il logout la incrementa sull'account
-    // e da quel momento questo token non viene più accettato.
-    { id: user._id, email: user.email, username: user.username, tv: user.tokenVersion || 0 },
-    getJwtSecret(),
-    { expiresIn: JWT_EXPIRES_IN }
-  );
-};
-
-const SESSION_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: isProduction(),
-  sameSite: 'lax'
-};
+/**
+ * Firma e cookie vivono in `services/session.js`.
+ *
+ * Erano definiti qui, e il middleware che verifica i token non poteva usarli
+ * senza una dipendenza circolare: e' il motivo per cui la sessione non si
+ * rinnovava mai. Ora la durata, la firma e le opzioni del cookie hanno un solo
+ * proprietario, e chi emette e chi verifica leggono lo stesso file.
+ */
+const generateToken = signSession;
 
 
 // Helper to sanitize User response object
@@ -146,6 +160,10 @@ const formatUserResponse = (user) => ({
   // pannello dei contenuti per adulti e lo stato del consenso ai cookie.
   role: user.role || 'user',
   isAdult: typeof user.isAdult === 'function' ? user.isAdult() : false,
+  // Il client ne ha bisogno subito: da questo dipendono la striscia di avviso e
+  // il pannello del codice, che devono comparire prima che l'utente sbatta
+  // contro un 403 provando a scrivere.
+  emailVerified: !!user.emailVerifiedAt,
   nsfwEnabled: user.nsfwEnabled === true,
   cookieConsent: user.cookieConsent || null,
   billingCountry: user.billingCountry || null,
@@ -247,20 +265,64 @@ router.post('/register', registerLimiter, async (req, res) => {
       throw createErr;
     }
 
+    /**
+     * Il codice parte subito, ma la registrazione NON dipende dal suo invio.
+     *
+     * `issueVerificationCode` non solleva mai: se il fornitore di posta e' giu'
+     * l'account esiste comunque e l'utente puo' chiedere un rinvio. Legare la
+     * creazione dell'account alla consegna di un'email significherebbe che un
+     * guasto del mailer equivale a un sito che non accetta piu' iscrizioni.
+     *
+     * La sessione si apre lo stesso: si entra, si guarda il catalogo, e il
+     * cancello scatta solo su cio' che costa (vedi `requireVerifiedEmail`).
+     * Un muro prima ancora di aver visto il prodotto perde le persone.
+     */
+    await issueVerificationCode(newUser);
+
     const token = generateToken(newUser);
 
     // Set secure HttpOnly Cookie
-    res.cookie('yc_token', token, { ...SESSION_COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    setSessionCookie(res, token);
 
     res.status(201).json({
-      message: 'Registrazione completata con successo',
+      message: 'Registrazione completata. Ti abbiamo inviato un codice di conferma.',
       token,
+      requiresEmailVerification: true,
       user: formatUserResponse(newUser)
     });
   } catch (error) {
     serverFailure(req, res, error, 'Errore durante la registrazione');
   }
 });
+
+/**
+ * Quanti errori consecutivi prima del blocco, e per quanto.
+ *
+ * Dieci e' deliberatamente generoso: chi digita male la propria password tre o
+ * quattro volte non deve incontrare nulla. Chi ne sbaglia dieci di fila non sta
+ * ricordando, sta provando.
+ *
+ * Quindici minuti tagliano il ritmo di un attacco distribuito di due ordini di
+ * grandezza e costano alla persona vera un caffe'. Un blocco piu' lungo
+ * proteggerebbe poco di piu' e trasformerebbe questa difesa nell'arma di chi
+ * volesse tenere qualcuno fuori dal proprio account.
+ */
+const MAX_FAILED_LOGINS = 10;
+const LOCK_DURATION_MS = 15 * 60 * 1000;
+
+async function registraTentativoFallito(user) {
+  const tentativi = (user.failedLoginAttempts || 0) + 1;
+
+  const aggiornamento = { failedLoginAttempts: tentativi };
+  if (tentativi >= MAX_FAILED_LOGINS) {
+    aggiornamento.lockedUntil = new Date(Date.now() + LOCK_DURATION_MS);
+    // Il conto riparte insieme al blocco: alla scadenza si hanno di nuovo
+    // dieci tentativi, non uno solo prima di ribloccarsi all'infinito.
+    aggiornamento.failedLoginAttempts = 0;
+  }
+
+  await User.updateOne({ _id: user._id }, { $set: aggiornamento });
+}
 
 // POST /api/auth/login - Authenticate local user with brute-force rate limit & timing protection
 router.post('/login', loginLimiter, async (req, res) => {
@@ -273,7 +335,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     const { email, password } = parseResult.data;
 
     // Fetch user including hidden passwordHash
-    const user = await User.findOne({ email }).select('+passwordHash');
+    const user = await User.findOne({ email })
+      .select('+passwordHash +failedLoginAttempts +lockedUntil');
 
     // Protect against account enumeration / timing attacks
     if (!user || !user.passwordHash) {
@@ -282,15 +345,57 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Credenziali non valide' });
     }
 
-    const isValidPassword = await user.comparePassword(password);
-    if (!isValidPassword) {
+    /**
+     * Account temporaneamente bloccato dopo troppi tentativi falliti.
+     *
+     * Si controlla PRIMA di confrontare la password, cosi' il blocco fa
+     * risparmiare anche il costo di bcrypt — che con fattore 12 e' la parte
+     * cara di questa rotta, ed e' proprio la risorsa che un attacco
+     * distribuito vuole consumare.
+     *
+     * Il messaggio e' lo STESSO di una password sbagliata: chi tenta non deve
+     * poter distinguere «bloccato» da «errata», altrimenti il blocco diventa un
+     * oracolo che conferma quali indirizzi hanno un account.
+     */
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
       return res.status(401).json({ error: 'Credenziali non valide' });
     }
+
+    const isValidPassword = await user.comparePassword(password);
+    if (!isValidPassword) {
+      await registraTentativoFallito(user);
+      return res.status(401).json({ error: 'Credenziali non valide' });
+    }
+
+    // Password corretta: il conto riparte da zero. Il blocco protegge da una
+    // SEQUENZA di errori, non da un errore isolato di chi si e' distratto.
+    if (user.failedLoginAttempts || user.lockedUntil) {
+      await User.updateOne({ _id: user._id }, {
+        $set: { failedLoginAttempts: 0, lockedUntil: null }
+      });
+    }
+
+    /**
+     * Una sospensione a termine scaduta va revocata ANCHE qui.
+     *
+     * `applyBanExpiry` viveva solo in `middleware/auth.js`, cioe' sul percorso
+     * che risolve una sessione gia' esistente. Ma chi e' sospeso non ha una
+     * sessione: gliela abbiamo tolta incrementando `tokenVersion` al momento
+     * del ban. Per rientrare deve passare da qui — e qui la scadenza non
+     * veniva mai guardata.
+     *
+     * Risultato: ogni sospensione «di sette giorni» era in realta' perpetua, e
+     * la data comunicata all'utente una promessa che nessuna riga di codice
+     * poteva mantenere. Il difetto era invisibile perche' per vederlo bisogna
+     * arrivare all'ottavo giorno.
+     */
+    await applyBanExpiry(user);
 
     if (user.isBanned) {
       return res.status(403).json({
         error: 'Account sospeso',
-        reason: user.banReason || 'Violazione dei termini di servizio'
+        reason: user.banReason || 'Violazione dei termini di servizio',
+        ...(user.banExpiresAt ? { until: user.banExpiresAt } : {})
       });
     }
 
@@ -300,7 +405,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const token = generateToken(user);
 
-    res.cookie('yc_token', token, { ...SESSION_COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    setSessionCookie(res, token);
 
     res.json({
       message: 'Accesso effettuato con successo',
@@ -327,7 +432,7 @@ router.post('/logout', attachUser, async (req, res) => {
     warnFailure(req, error, 'Revoca dei token non riuscita durante la disconnessione');
   }
 
-  res.clearCookie('yc_token', SESSION_COOKIE_OPTIONS);
+  clearSessionCookie(res);
   res.json({ success: true, message: 'Disconnessione effettuata con successo' });
 });
 
@@ -383,11 +488,7 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Token mancante' });
     }
 
-    const passwordCheck = z.string()
-      .min(8, 'La password deve contenere almeno 8 caratteri')
-      .regex(/[A-Z]/, 'La password deve contenere almeno una lettera maiuscola')
-      .regex(/[0-9]/, 'La password deve contenere almeno un numero')
-      .safeParse(password);
+    const passwordCheck = passwordSchema.safeParse(password);
 
     if (!passwordCheck.success) {
       return res.status(400).json({ error: passwordCheck.error.errors[0].message });
@@ -410,9 +511,227 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
     user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
+    /**
+     * L'avviso di avvenuto cambio: è il rilevatore, non la serratura.
+     *
+     * Se un estraneo si è impossessato della casella e ha reimpostato la
+     * password, questa email è l'unico momento in cui il titolare può
+     * accorgersene — e prima non veniva mandata: il furto avveniva in
+     * silenzio. Non blocca nulla e non protegge da sola; rende visibile una
+     * cosa che altrimenti si scopre settimane dopo.
+     *
+     * Non aspetta e non fallisce: la password È stata cambiata, e un errore di
+     * posta non può ribaltare una scrittura già avvenuta.
+     */
+    sendMail({
+      to: user.email,
+      subject: 'La tua password è stata cambiata',
+      text: [
+        `Ciao ${user.username},`,
+        '',
+        'la password del tuo account your-character è appena stata reimpostata,',
+        'e tutte le sessioni aperte sono state chiuse.',
+        '',
+        'Se non sei stato tu, qualcuno ha accesso a questa casella di posta:',
+        'reimposta subito la password da qui e cambia anche quella dell\'email.',
+        '',
+        '— your-character'
+      ].join('\n')
+    }).catch(() => { /* già registrato dentro sendMail */ });
+
     res.json({ success: true, message: 'Password aggiornata. Ora puoi accedere.' });
   } catch (error) {
     serverFailure(req, res, error, 'Impossibile reimpostare la password');
+  }
+});
+
+/**
+ * PATCH /api/auth/password — cambio password da dentro.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * NON ESISTEVA. L'unico modo di cambiare password era il giro completo del
+ * recupero: dichiararsi smemorati, aspettare un'email, aprire un link. Per
+ * un'operazione ordinaria — «uso questa password anche altrove e voglio
+ * cambiarla» — significava che quasi nessuno la faceva.
+ *
+ * Serve la password ATTUALE, e non è una formalità: senza, chiunque trovasse
+ * un portatile sbloccato potrebbe cambiare la password e prendersi l'account
+ * senza conoscerne nessuna. È la stessa ragione per cui la cancellazione
+ * dell'account la richiede (`routes/users.js`).
+ *
+ * Chiude tutte le altre sessioni: dopo un cambio password volontario, ciò che
+ * era aperto altrove non deve restare aperto. La sessione corrente riceve un
+ * token nuovo nella risposta, altrimenti chi cambia la password si
+ * disconnetterebbe da solo.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+router.patch('/password', requireAuth, async (req, res) => {
+  try {
+    const attuale = String(req.body && req.body.currentPassword || '');
+    const nuova = String(req.body && req.body.newPassword || '');
+
+    const utente = await User.findById(req.user._id).select('+passwordHash');
+    if (!utente) return res.status(404).json({ error: 'Utente non trovato' });
+
+    // Un account creato senza password (provider esterno) non ne ha una da
+    // confrontare: dirlo, invece di rifiutare per «password errata».
+    if (!utente.passwordHash) {
+      return res.status(400).json({
+        error: 'Questo account non usa una password. Usa il recupero per impostarne una.'
+      });
+    }
+
+    if (!(await utente.comparePassword(attuale))) {
+      return res.status(401).json({ error: 'La password attuale non è corretta.' });
+    }
+
+    const check = passwordSchema.safeParse(nuova);
+    if (!check.success) {
+      return res.status(400).json({ error: check.error.errors[0].message });
+    }
+
+    if (attuale === nuova) {
+      return res.status(400).json({ error: 'La nuova password è identica a quella attuale.' });
+    }
+
+    utente.passwordHash = await bcrypt.hash(check.data, 12);
+    utente.tokenVersion = (utente.tokenVersion || 0) + 1;
+    await utente.save();
+
+    // Il token nuovo porta la `tokenVersion` aggiornata: chi ha cambiato la
+    // password resta dentro, tutti gli altri dispositivi escono.
+    const token = generateToken(utente);
+    setSessionCookie(res, token);
+
+    sendMail({
+      to: utente.email,
+      subject: 'La tua password è stata cambiata',
+      text: [
+        `Ciao ${utente.username},`,
+        '',
+        'la password del tuo account your-character è appena stata cambiata,',
+        'e le sessioni aperte sugli altri dispositivi sono state chiuse.',
+        '',
+        'Se non sei stato tu, reimposta subito la password dal recupero.',
+        '',
+        '— your-character'
+      ].join('\n')
+    }).catch(() => {});
+
+    res.json({
+      success: true,
+      message: 'Password aggiornata. Gli altri dispositivi sono stati disconnessi.',
+      token
+    });
+  } catch (error) {
+    serverFailure(req, res, error, 'Impossibile cambiare la password');
+  }
+});
+
+/**
+ * Limitatore del rinvio del codice.
+ *
+ * Cinque all'ora per indirizzo IP, sopra al freno di un minuto che vive nel
+ * servizio e guarda il dato salvato. Due strati diversi per due abusi diversi:
+ * il freno impedisce a due schede aperte di mandare due email, il limitatore
+ * impedisce di usare il rinvio come mitragliatrice contro la casella di
+ * qualcun altro — che e' l'abuso vero, perche' il bersaglio non e' il servizio
+ * ma una persona.
+ */
+const verificationResendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: 'Troppi invii. Riprova tra un\'ora.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipInTests
+});
+
+/**
+ * POST /api/auth/verify-email — conferma con il codice ricevuto.
+ *
+ * Richiede la sessione: si conferma il PROPRIO indirizzo, mai quello di un
+ * altro. E' anche cio' che permette di distinguere «scaduto» da «sbagliato»
+ * senza aprire un canale di enumerazione — per arrivare qui bisogna gia'
+ * essere entrati in quell'account.
+ */
+router.post('/verify-email', requireAuth, async (req, res) => {
+  try {
+    const code = String(req.body && req.body.code || '').trim();
+
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: 'Il codice è composto da sei cifre.' });
+    }
+
+    const esito = await verifyCode(req.user._id, code);
+
+    if (esito.ok) {
+      const aggiornato = await User.findById(req.user._id);
+      return res.json({
+        success: true,
+        message: 'Indirizzo confermato.',
+        user: formatUserResponse(aggiornato)
+      });
+    }
+
+    const messaggi = {
+      scaduto: 'Il codice è scaduto. Chiedine uno nuovo.',
+      troppi_tentativi: `Hai esaurito i ${MAX_ATTEMPTS} tentativi per questo codice. Chiedine uno nuovo.`,
+      nessun_codice: 'Nessun codice in attesa. Chiedine uno nuovo.',
+      codice_errato: 'Codice non corretto.'
+    };
+
+    return res.status(400).json({
+      error: messaggi[esito.reason] || 'Codice non valido.',
+      reason: esito.reason,
+      // Dirgli quanti ne restano evita che scopra il tetto sbattendoci contro.
+      ...(typeof esito.attemptsLeft === 'number' ? { attemptsLeft: esito.attemptsLeft } : {})
+    });
+  } catch (error) {
+    serverFailure(req, res, error, 'Impossibile verificare il codice');
+  }
+});
+
+/**
+ * POST /api/auth/resend-verification — chiede un codice nuovo.
+ *
+ * Risposta uniforme: chi e' gia' verificato e chi ha appena chiesto un codice
+ * ricevono lo stesso `success`. Non e' per riservatezza — l'utente e' gia'
+ * autenticato e sa chi e' — e' per non trasformare il freno di un minuto in un
+ * errore da interpretare: l'unica cosa da fare, in entrambi i casi, e' andare
+ * a guardare nella posta.
+ */
+router.post('/resend-verification', requireAuth, verificationResendLimiter, async (req, res) => {
+  try {
+    const utente = await User.findById(req.user._id).select('+emailVerificationSentAt');
+    if (!utente) return res.status(404).json({ error: 'Utente non trovato' });
+
+    const esito = await issueVerificationCode(utente);
+
+    /**
+     * Distinguere «non ho inviato» da «non ci sono riuscito».
+     *
+     *  · `gia_verificato` / `troppo_presto` — non c'era niente da mandare.
+     *  · `sviluppo` — nessun trasporto configurato FUORI produzione: e' il modo
+     *    normale di lavorare in locale e nei test, dove il codice si legge dal
+     *    database. Un 502 qui renderebbe il flusso impercorribile in sviluppo.
+     *  · tutto il resto — in produzione `mailer_non_configurato`, o un errore
+     *    del fornitore. Qui il 502 e' obbligatorio: senza, l'utente resta a
+     *    fissare «controlla la posta» per una posta che non partira' mai, che
+     *    e' esattamente il fallimento silenzioso che questo lavoro elimina.
+     */
+    const nonEUnGuasto = ['gia_verificato', 'troppo_presto', 'sviluppo'];
+
+    if (!esito.sent && esito.reason && !nonEUnGuasto.includes(esito.reason)) {
+      return res.status(502).json({
+        error: 'Non siamo riusciti a inviare il codice. Riprova fra qualche minuto.',
+        reason: esito.reason
+      });
+    }
+
+    return res.json({ success: true, message: 'Se serve un codice, te lo abbiamo inviato.' });
+  } catch (error) {
+    serverFailure(req, res, error, 'Impossibile inviare il codice');
   }
 });
 

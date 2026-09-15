@@ -54,6 +54,7 @@ beforeEach(async () => {
     User.deleteMany({}), Chat.deleteMany({}), Character.deleteMany({}), Transaction.deleteMany({})
   ]);
   utente = await User.create({
+    emailVerifiedAt: new Date(),
     email: 'tizio@example.com',
     username: 'tizio',
     authProvider: 'local',
@@ -232,6 +233,7 @@ describe('S4 — il webhook accredita secondo la transazione, non i metadati', (
 
   it('e nemmeno un destinatario diverso li dirotta', async () => {
     const altro = await User.create({
+    emailVerifiedAt: new Date(),
       email: 'altro@example.com', username: 'altro', authProvider: 'local', credits: 0
     });
 

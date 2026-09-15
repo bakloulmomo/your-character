@@ -28,6 +28,7 @@ beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
   await mongoose.connect(mongoServer.getUri());
   await User.create({
+    emailVerifiedAt: new Date(),
     email: 'vittima@example.com',
     username: 'vittima',
     authProvider: 'local',

@@ -38,6 +38,27 @@ const isTest = () => process.env.NODE_ENV === 'test';
  * assertProductionEnv() ha già fatto fallire l'avvio.
  */
 const jwtSecret = () => {
+  /**
+   * NON aggiungere qui controlli di configurazione.
+   *
+   * Questa funzione è sul percorso caldo: la chiama `signSession` a ogni
+   * accesso e `resolveUser` a ogni richiesta autenticata. Un blocco che
+   * valida l'ambiente era finito qui per copia — quello su `DEV_OUTBOX`, che
+   * vive corretto in `assertProductionEnv()` — e chiamava `problems.push()`
+   * su una variabile che in questo scope non esiste.
+   *
+   * Effetto misurato: con `DEV_OUTBOX=1` — cioè la configurazione che
+   * `scripts/e2eStack.js` deve usare per far leggere ai test il codice di
+   * conferma — ogni firma sollevava `ReferenceError`. Il login rispondeva
+   * 500, e sul percorso di VERIFICA l'eccezione veniva inghiottita dal
+   * `catch` che tratta i token illeggibili come visitatori anonimi: nessun
+   * errore, solo ogni richiesta autenticata degradata ad anonima. L'intera
+   * suite end-to-end era ferma, e con essa il job `e2e` della CI.
+   *
+   * Le guardie d'ambiente stanno in `assertProductionEnv()`, che gira una
+   * volta all'avvio e raccoglie TUTTI i problemi insieme. Qui si restituisce
+   * un segreto, e basta.
+   */
   const secret = process.env.JWT_SECRET;
   if (isProduction()) {
     if (!secret || secret === DEFAULT_JWT_SECRET || secret.length < MIN_JWT_SECRET_LENGTH) {
@@ -57,6 +78,32 @@ const mockPaymentsEnabled = () => {
   const key = process.env.STRIPE_SECRET_KEY;
   return !key || isPlaceholder(key);
 };
+
+/**
+ * La casella di posta di SVILUPPO.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Senza trasporto configurato le email non partono, e finora questo rendeva la
+ * conferma dell'indirizzo IMPERCORRIBILE fuori produzione: il codice esiste
+ * solo come impronta SHA-256 nel database, quindi non è recuperabile nemmeno
+ * guardando la collezione. Conseguenza misurata: la suite end-to-end si è
+ * fermata su cinque percorsi su nove — registrarsi funzionava, e da lì in poi
+ * niente, perché scrivere a un personaggio richiede l'indirizzo confermato.
+ *
+ * La casella tiene in memoria gli ultimi messaggi «non inviati», e una rotta di
+ * sviluppo li mostra. Serve a due cose reali: percorrere la verifica vera nei
+ * test end-to-end invece di aggirarla con una scorciatoia che nessun utente
+ * attraversa, e vedere le email mentre si sviluppa senza configurare un
+ * mailer.
+ *
+ * DUE condizioni, come per i pagamenti simulati: fuori produzione E con la
+ * variabile accesa a mano. Nessuna delle due si verifica per distrazione, e
+ * `assertProductionEnv()` rifiuta l'avvio se la variabile compare in
+ * produzione — perché quella casella contiene codici di conferma e link di
+ * recupero password in chiaro.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+const devOutboxEnabled = () => !isProduction() && process.env.DEV_OUTBOX === '1';
 
 /**
  * Modalità del motore AI:
@@ -232,6 +279,17 @@ function assertProductionEnv() {
     problems.push('FRONTEND_URL: manca l\'origine autorizzata per CORS e per i redirect di pagamento.');
   }
 
+  /**
+   * La casella di sviluppo contiene codici di conferma e link di recupero
+   * password in chiaro: in produzione non deve poter esistere nemmeno per
+   * errore di configurazione. `devOutboxEnabled()` già la spegne; questo
+   * controllo fa FALLIRE L'AVVIO, che è l'unico modo perché qualcuno se ne
+   * accorga invece di scoprirla mesi dopo.
+   */
+  if (process.env.DEV_OUTBOX) {
+    problems.push('DEV_OUTBOX: la casella di posta di sviluppo espone codici di conferma e link di recupero password. Non può essere impostata in produzione.');
+  }
+
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     problems.push('JWT_SECRET: mancante.');
@@ -306,6 +364,7 @@ module.exports = {
   isPlaceholder,
   jwtSecret,
   mockPaymentsEnabled,
+  devOutboxEnabled,
   adminEmails,
   sellerDetails,
   aiMode,

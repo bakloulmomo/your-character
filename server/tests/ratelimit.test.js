@@ -36,7 +36,8 @@ describe('FASE B — Limiti di frequenza sugli endpoint costosi', () => {
 
   beforeEach(async () => {
     await Promise.all([User.deleteMany({}), Character.deleteMany({}), Chat.deleteMany({}), Message.deleteMany({})]);
-    user = await User.create({ clerkId: CLERK, email: 'rl@example.com', username: 'ratelimited', credits: 10000 });
+    user = await User.create({
+    emailVerifiedAt: new Date(), clerkId: CLERK, email: 'rl@example.com', username: 'ratelimited', credits: 10000 });
     const character = await Character.create({
       name: 'Bersaglio',
       description: 'Personaggio usato per verificare i limiti di frequenza.',
@@ -103,7 +104,8 @@ describe('FASE B — Limiti di frequenza sugli endpoint costosi', () => {
 
     // Un secondo utente, con la propria chat, deve poter scrivere lo stesso:
     // con una chiave basata solo sull'IP sarebbe stato bloccato anche lui.
-    const other = await User.create({ clerkId: 'clerk_altro', email: 'altro@example.com', username: 'altro', credits: 100 });
+    const other = await User.create({
+    emailVerifiedAt: new Date(), clerkId: 'clerk_altro', email: 'altro@example.com', username: 'altro', credits: 100 });
     const otherCharacter = await Character.create({
       name: 'Secondo',
       description: 'Personaggio del secondo utente per il test di isolamento.',

@@ -1,5 +1,40 @@
 const express = require('express');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+/**
+ * Il client Stripe si costruisce alla PRIMA chiamata, non all'importazione.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Qui c'era `require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder')`,
+ * valutato al caricamento del modulo. Due difetti in una riga.
+ *
+ * Il primo: la chiave veniva letta PRIMA che `assertProductionEnv()` avesse
+ * modo di girare, quindi il ripiego `sk_test_placeholder` esisteva anche in
+ * produzione. Non poteva incassare nulla — nessuna chiamata sarebbe andata a
+ * buon fine — ma il fallimento arrivava come un errore Stripe incomprensibile
+ * al primo pagamento di un cliente vero, invece che come un rifiuto d'avvio.
+ *
+ * Il secondo, piu' sottile: un valore di ripiego che «sembra» una chiave
+ * impedisce a chiunque di accorgersi che la chiave manca. La direzione giusta
+ * e' quella che il resto del progetto ha gia' scelto — fallire forte e presto.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+let stripeClient = null;
+
+const stripe = new Proxy({}, {
+  get(_target, prop) {
+    if (!stripeClient) {
+      const key = process.env.STRIPE_SECRET_KEY;
+      if (!key) {
+        // Non dovrebbe accadere: `requireFeature('payments')` chiude le rotte e
+        // `assertProductionEnv()` rifiuta l'avvio. Se accade, e' un errore di
+        // montaggio e va detto con chiarezza invece di produrre un 500 opaco.
+        throw new Error('STRIPE_SECRET_KEY non configurata: il percorso di pagamento non è utilizzabile.');
+      }
+      stripeClient = require('stripe')(key);
+    }
+    return stripeClient[prop];
+  }
+});
+const { requireVerifiedEmail } = require('./../middleware/requireVerifiedEmail');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const User = require('../models/User');
@@ -124,7 +159,7 @@ router.get('/plans', requireFeature('subscriptions'), (req, res) => {
 });
 
 // POST /api/payments/checkout - Create Stripe PaymentIntent for a credit pack
-router.post('/checkout', requireFeature('payments'), requireAuth, checkoutLimiter, async (req, res) => {
+router.post('/checkout', requireFeature('payments'), requireAuth, requireVerifiedEmail, checkoutLimiter, async (req, res) => {
   try {
     const { packageId } = req.body;
 

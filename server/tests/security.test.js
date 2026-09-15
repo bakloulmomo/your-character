@@ -58,7 +58,8 @@ describe('FASE A — Sicurezza economica', () => {
     ENV_KEYS.forEach((k) => { savedEnv[k] = process.env[k]; });
 
     await Promise.all([User.deleteMany({}), Character.deleteMany({}), Chat.deleteMany({}), Transaction.deleteMany({})]);
-    user = await User.create({ email: 'paganti@example.com', username: 'paganti', credits: 0, authProvider: 'local' });
+    user = await User.create({
+    emailVerifiedAt: new Date(), email: 'paganti@example.com', username: 'paganti', credits: 0, authProvider: 'local' });
     token = tokenFor(user);
   });
 

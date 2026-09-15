@@ -49,6 +49,7 @@ describe('FASE 5: Image Generation & Stripe Payments Integration Tests', () => {
     ]);
 
     testUser = await User.create({
+    emailVerifiedAt: new Date(),
       clerkId: 'clerk_payment_user',
       email: 'payment@example.com',
       username: 'paymentuser',

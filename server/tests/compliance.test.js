@@ -30,7 +30,8 @@ describe('FASE D — Conformità', () => {
 
   beforeEach(async () => {
     await User.deleteMany({});
-    user = await User.create({ email: 'conforme@example.com', username: 'conforme', birthdate: new Date('1990-01-01') });
+    user = await User.create({
+    emailVerifiedAt: new Date(), email: 'conforme@example.com', username: 'conforme', birthdate: new Date('1990-01-01') });
     token = tokenFor(user);
   });
 

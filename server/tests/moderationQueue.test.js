@@ -60,10 +60,14 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
       User.deleteMany({}), Character.deleteMany({}), Chat.deleteMany({}), Report.deleteMany({})
     ]);
 
-    author = await User.create({ email: 'autore@example.com', username: 'autore', birthdate: yearsAgo(30) });
-    reader = await User.create({ email: 'lettore@example.com', username: 'lettore', birthdate: yearsAgo(30) });
-    moderator = await User.create({ email: 'mod@example.com', username: 'moderatore', role: 'moderator', birthdate: yearsAgo(35) });
-    minor = await User.create({ email: 'giovane@example.com', username: 'giovane', birthdate: yearsAgo(15) });
+    author = await User.create({
+    emailVerifiedAt: new Date(), email: 'autore@example.com', username: 'autore', birthdate: yearsAgo(30) });
+    reader = await User.create({
+    emailVerifiedAt: new Date(), email: 'lettore@example.com', username: 'lettore', birthdate: yearsAgo(30) });
+    moderator = await User.create({
+    emailVerifiedAt: new Date(), email: 'mod@example.com', username: 'moderatore', role: 'moderator', birthdate: yearsAgo(35) });
+    minor = await User.create({
+    emailVerifiedAt: new Date(), email: 'giovane@example.com', username: 'giovane', birthdate: yearsAgo(15) });
 
     authorToken = tokenFor(author);
     readerToken = tokenFor(reader);
@@ -435,7 +439,8 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
     });
 
     it('nemmeno chi non ha dichiarato una data di nascita', async () => {
-      const unknown = await User.create({ email: 'ignoto@example.com', username: 'ignoto' });
+      const unknown = await User.create({
+    emailVerifiedAt: new Date(), email: 'ignoto@example.com', username: 'ignoto' });
       const res = await as(request(app).patch('/api/users/me/preferences'), tokenFor(unknown))
         .send({ nsfwEnabled: true });
       expect(res.status).toBe(403);

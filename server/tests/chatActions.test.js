@@ -38,7 +38,8 @@ describe('FASE C — Streaming e azioni sui messaggi', () => {
 
   beforeEach(async () => {
     await Promise.all([User.deleteMany({}), Character.deleteMany({}), Chat.deleteMany({}), Message.deleteMany({})]);
-    user = await User.create({ clerkId: CLERK, email: 'act@example.com', username: 'actions', credits: 50 });
+    user = await User.create({
+    emailVerifiedAt: new Date(), clerkId: CLERK, email: 'act@example.com', username: 'actions', credits: 50 });
     character = await Character.create({
       name: 'Narratore',
       description: 'Personaggio usato per verificare le azioni sulla conversazione.',
