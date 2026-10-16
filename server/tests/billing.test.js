@@ -39,7 +39,8 @@ describe('FASE D — Fiscalità e ricevute', () => {
 
   beforeEach(async () => {
     await Promise.all([User.deleteMany({}), Transaction.deleteMany({}), Counter.deleteMany({})]);
-    user = await User.create({ email: 'cliente@example.com', username: 'cliente', credits: 0 });
+    user = await User.create({
+    emailVerifiedAt: new Date(), email: 'cliente@example.com', username: 'cliente', credits: 0 });
     token = tokenFor(user);
   });
 
@@ -162,7 +163,8 @@ describe('FASE D — Fiscalità e ricevute', () => {
     it('non si può leggere la ricevuta di un altro utente', async () => {
       const { transactionId } = await completeCheckout();
 
-      const stranger = await User.create({ email: 'estraneo@example.com', username: 'estraneo' });
+      const stranger = await User.create({
+    emailVerifiedAt: new Date(), email: 'estraneo@example.com', username: 'estraneo' });
       const res = await request(app)
         .get(`/api/payments/receipt/${transactionId}`)
         .set('Authorization', `Bearer ${tokenFor(stranger)}`);

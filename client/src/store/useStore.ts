@@ -84,6 +84,14 @@ export interface UserProfile {
   dailyImageCount: number;
   role?: 'user' | 'moderator' | 'admin';
   isAdult?: boolean;
+  /**
+   * L'indirizzo e' stato confermato con il codice.
+   *
+   * Il server lo rimanda a ogni `/auth/me`, quindi non serve conservarlo
+   * altrove: e' lui la fonte, e una copia locale divergerebbe appena l'utente
+   * conferma da un'altra scheda.
+   */
+  emailVerified?: boolean;
   nsfwEnabled?: boolean;
   cookieConsent?: CookieConsentRecord | null;
   billingCountry?: string | null;
@@ -150,11 +158,11 @@ interface AppState {
   token: string | null;
   isAuthResolved: boolean;
   isAuthModalOpen: boolean;
-  authModalMode: 'login' | 'register';
+  authModalMode: 'login' | 'register' | 'verify';
   setUser: (user: UserProfile | null) => void;
   setToken: (token: string | null) => void;
   setAuthResolved: (resolved: boolean) => void;
-  setAuthModalOpen: (open: boolean, mode?: 'login' | 'register') => void;
+  setAuthModalOpen: (open: boolean, mode?: 'login' | 'register' | 'verify') => void;
   logout: () => Promise<void>;
   updateCredits: (credits: number) => void;
   patchUser: (patch: Partial<UserProfile>) => void;
@@ -174,6 +182,17 @@ interface AppState {
   setChatsLoadedFor: (key: string | null) => void;
   setChats: (chats: Chat[]) => void;
   setChatsStatus: (status: 'idle' | 'loading' | 'ready' | 'error') => void;
+  /**
+   * Continuazione della cronologia.
+   *
+   * Il server restituisce le trenta conversazioni più recenti e manda il
+   * seguito in `X-Has-More` / `X-Next-Cursor`. Finché il client non li leggeva,
+   * chi aveva più di trenta conversazioni non poteva più raggiungere le altre
+   * dall'interfaccia: esistevano, erano ordinate, ed erano irraggiungibili.
+   */
+  chatsCursor: string | null;
+  chatsHasMore: boolean;
+  appendChats: (chats: Chat[], cursor: string | null, hasMore: boolean) => void;
   upsertChat: (chat: Chat) => void;
   removeChat: (chatId: string) => void;
 
@@ -197,10 +216,54 @@ interface AppState {
   setBuyCreditsModalOpen: (open: boolean) => void;
   setReportModalOpen: (open: boolean, target?: { type: 'character' | 'message' | 'user'; id: string } | null) => void;
 
+  /**
+   * Conferma prima di un'azione irreversibile.
+   *
+   * Sta nello store, e non come stato locale di ogni pagina, perché la stessa
+   * domanda serve in sei punti diversi — messaggio, conversazione, personaggio,
+   * account, disconnessione, rimozione da moderatore. Sei copie della stessa
+   * finestra sono sei occasioni di scriverla in modo leggermente diverso, ed è
+   * esattamente così che nascono le interfacce in cui il pulsante pericoloso è
+   * a destra in una schermata e a sinistra in un'altra.
+   *
+   * `askConfirm` restituisce una promessa: chi chiama scrive una riga sola e
+   * legge la risposta dove gli serve, senza montare nulla.
+   *
+   *     if (!(await askConfirm({ title: 'Sei sicuro di voler eliminare…' }))) return;
+   */
+  confirmRequest: ConfirmRequest | null;
+  askConfirm: (request: ConfirmOptions) => Promise<boolean>;
+  resolveConfirm: (accepted: boolean) => void;
+
   // Notifiche
   toasts: Toast[];
   notify: (message: string, kind?: ToastKind) => void;
   dismissToast: (id: string) => void;
+}
+
+/**
+ * Una richiesta di conferma. `resolve` viene aggiunto dallo store: chi chiama
+ * non lo passa, aspetta la promessa.
+ */
+export interface ConfirmOptions {
+  /** La domanda. Per convenzione: «Sei sicuro di voler eliminare X?» */
+  title: string;
+  /** Che cosa succede davvero, se non è ovvio dal titolo. */
+  description?: string;
+  /** Il pulsante rosso, a destra. */
+  confirmLabel?: string;
+  /** Il pulsante di rinuncia, a sinistra. */
+  cancelLabel?: string;
+  /**
+   * `false` per una conferma che non distrugge nulla — la disconnessione, per
+   * esempio: interrompe qualcosa, ma non cancella niente, e dipingerla di rosso
+   * come l'eliminazione di un account svaluta il rosso dove serve davvero.
+   */
+  destructive?: boolean;
+}
+
+interface ConfirmRequest extends ConfirmOptions {
+  resolve: (accepted: boolean) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -255,7 +318,7 @@ export const useStore = create<AppState>((set, get) => ({
     // Il cookie viene cancellato dal server, che e' l'unico a poterlo fare:
     // e' httpOnly. Qui si ripulisce solo lo stato in memoria.
     setAuthToken(null);
-    set({ user: null, token: null, chats: [], chatsStatus: 'idle', chatsLoadedFor: null });
+    set({ user: null, token: null, chats: [], chatsStatus: 'idle', chatsLoadedFor: null, chatsCursor: null, chatsHasMore: false });
   },
 
   updateCredits: (credits) =>
@@ -269,6 +332,15 @@ export const useStore = create<AppState>((set, get) => ({
   setChatsLoadedFor: (chatsLoadedFor) => set({ chatsLoadedFor }),
   setChats: (chats) => set({ chats }),
   setChatsStatus: (chatsStatus) => set({ chatsStatus }),
+  chatsCursor: null,
+  chatsHasMore: false,
+  appendChats: (nuove, chatsCursor, chatsHasMore) =>
+    set((s) => {
+      // Deduplica per identificativo: una conversazione che riceve un messaggio
+      // mentre si sfoglia risale in cima e ricomparirebbe nella pagina dopo.
+      const gia = new Set(s.chats.map((c) => c._id));
+      return { chats: [...s.chats, ...nuove.filter((c) => !gia.has(c._id))], chatsCursor, chatsHasMore };
+    }),
   upsertChat: (chat) =>
     set((s) => {
       const rest = s.chats.filter((c) => c._id !== chat._id);
@@ -288,6 +360,26 @@ export const useStore = create<AppState>((set, get) => ({
   isBuyCreditsModalOpen: false,
   isReportModalOpen: false,
   reportTarget: null,
+
+  confirmRequest: null,
+  askConfirm: (request) =>
+    new Promise<boolean>((resolve) => {
+      /**
+       * Se una conferma è già aperta, la precedente viene chiusa con un rifiuto
+       * invece di restare appesa. Una promessa che non si risolve mai è un
+       * `await` che non torna: la funzione che lo attendeva resterebbe ferma
+       * per sempre, con il suo stato «in corso» acceso.
+       */
+      const inCorso = get().confirmRequest;
+      if (inCorso) inCorso.resolve(false);
+      set({ confirmRequest: { ...request, resolve } });
+    }),
+  resolveConfirm: (accepted) => {
+    const request = get().confirmRequest;
+    if (!request) return;
+    set({ confirmRequest: null });
+    request.resolve(accepted);
+  },
   setBuyCreditsModalOpen: (isBuyCreditsModalOpen) => set({ isBuyCreditsModalOpen }),
   setReportModalOpen: (isReportModalOpen, reportTarget = null) =>
     set({ isReportModalOpen, reportTarget }),

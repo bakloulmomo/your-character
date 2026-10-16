@@ -56,15 +56,46 @@ services:
       - key: BETA_INVITE_CODE
         sync: false
 
-      # ── Primo moderatore ────────────────────────────────────────────────
+      # ── Recapito staff ──────────────────────────────────────────────────
+      # NON concede alcun ruolo: è solo il destinatario di ripiego delle
+      # notifiche. Per diventare amministratore vedi scripts/grantRole.js.
       - key: ADMIN_EMAILS
+        sync: false
+
+      # ── Posta ───────────────────────────────────────────────────────────
+      # SENZA UNO DI QUESTI DUE TRASPORTI IL PRODOTTO NON FUNZIONA: i codici di
+      # conferma non partono, quindi nessuno puo' scrivere un messaggio, e le
+      # opinioni restano in database senza che nessuno le veda.
+      #
+      # Precedenza: se c'e' RESEND_API_KEY vince Resend, altrimenti SMTP.
+      #
+      # Resend (a regime) richiede un dominio verificato con SPF e DKIM.
+      - key: RESEND_API_KEY
+        sync: false
+      # SMTP (ripiego senza dominio). Con Gmail: 2FA attiva sull'account e una
+      # "password per le app", non la password normale. Limiti da conoscere: il
+      # mittente e' l'indirizzo personale, il tetto e' di qualche centinaio di
+      # messaggi al giorno, e senza SPF/DKIM allineati una parte dei codici
+      # finisce nella posta indesiderata. E' un ripiego dichiarato: la soglia
+      # oltre la quale serve un dominio sta in DEPLOY.md.
+      - key: SMTP_HOST           # smtp.gmail.com
+        sync: false
+      - key: SMTP_PORT           # 465 (TLS implicito) oppure 587 (STARTTLS)
+        sync: false
+      - key: SMTP_USER           # l'indirizzo che invia
+        sync: false
+      - key: SMTP_PASS           # password per le app, MAI quella dell'account
+        sync: false
+      - key: MAIL_FROM           # default: SMTP_USER
+        sync: false
+      # Dove arrivano le opinioni degli utenti (default: primo ADMIN_EMAILS).
+      - key: FEEDBACK_EMAIL
         sync: false
 
       # ── Facoltativi ─────────────────────────────────────────────────────
       - key: SENTRY_DSN
         sync: false
-      - key: RESEND_API_KEY      # senza, il recupero password non invia email
-        sync: false
-      # Dove arrivano le opinioni degli utenti (default: primo ADMIN_EMAILS).
-      - key: FEEDBACK_EMAIL
-        sync: false
+      # Dimensione del pool verso Atlas. E' un budget CONDIVISO fra le istanze:
+      # passando a due istanze va dimezzato, non lasciato com'e'.
+      - key: MONGO_MAX_POOL_SIZE
+        value: "20"

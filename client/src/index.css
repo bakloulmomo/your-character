@@ -1,3 +1,27 @@
+/**
+ * I CARATTERI SONO OSPITATI QUI, non su Google.
+ *
+ * `index.html` li chiedeva a `fonts.googleapis.com`, e quella richiesta parte
+ * dal browser dell'utente PRIMA di qualunque consenso: porta con sé
+ * l'indirizzo IP, lo user-agent e il referrer, verso un servizio negli Stati
+ * Uniti. Un tribunale tedesco (Monaco, gennaio 2022) ha stabilito che è un
+ * trasferimento di dati personali senza base giuridica, e da allora è una
+ * delle contestazioni più frequenti in Europa — anche perché è banale da
+ * verificare dall'esterno: basta aprire il pannello di rete.
+ *
+ * `@fontsource-variable` mette gli stessi due caratteri fra le dipendenze:
+ * Vite li impacchetta, arrivano dal nostro dominio, e in più spariscono un
+ * `preconnect` e due richieste bloccanti verso un terzo. La CSP di
+ * `vercel.json` e `public/_headers` non ha più bisogno di aprire `font-src`
+ * e `style-src` a domini esterni.
+ *
+ * `wdth.css` e non `index.css` per Archivo: è la variante con l'asse di
+ * LARGHEZZA, che è tutto ciò che distingue l'insegna del prodotto da un
+ * grottesco qualunque.
+ */
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/schibsted-grotesk/index.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -15,6 +39,17 @@
      * pulsante di invio restavano tagliati fuori dallo schermo.
      */
     --yc-topbar: 3.5rem;
+
+    /**
+     * Spazio riservato in fondo al banner dei cookie, MISURATO a runtime dal
+     * `ResizeObserver` di `CookieBanner` e riscritto qui da `AppShell`.
+     *
+     * Il valore di ripiego non è cosmetico: `AppShell` usa
+     * `pb-[var(--yc-banner)]` senza fallback proprio, quindi finché la
+     * dichiarazione mancava il guscio reggeva solo perché la impostava sempre
+     * in linea. Una riga altrove, e il padding sarebbe diventato invalido.
+     */
+    --yc-banner: 0px;
   }
 
   @media (min-width: 768px) {
@@ -47,11 +82,12 @@
   }
 
   /**
-   * Newsreader ha l'asse ottico variabile: senza dichiararlo il browser usa la
-   * misura predefinita a QUALSIASI corpo, cioè un disegno da testo ingrandito.
+   * Archivo ha l'asse di LARGHEZZA variabile. Senza dichiararlo il browser
+   * compone alla larghezza normale, cioè un grottesco qualunque: la
+   * compressione è tutto ciò che distingue un'insegna da un titolo.
    */
   .font-display {
-    font-optical-sizing: auto;
+    font-variation-settings: 'wdth' 84;
   }
 
   /* Stato di focus visibile su tutto ciò che è raggiungibile da tastiera. */
@@ -99,6 +135,21 @@
   .card-surface:hover {
     @apply bg-surface-hover;
   }
+  /* NOTA: `.card-surface` era CSS morto — zero usi nel codice. Resta finché il
+     componente <Block> non l'ha assorbita del tutto, poi va tolta. */
+
+  /**
+   * Il velo dietro ciò che galleggia.
+   *
+   * Era `bg-black/60` nella barra laterale e `bg-black/70` nel modale: lo
+   * stesso oggetto con due opacità diverse, perché scritto due volte da due
+   * parti. Il nero puro qui è corretto — un velo È assenza di luce — ma deve
+   * avere un nome, altrimenti la prossima superficie che ne ha bisogno ne
+   * inventa una terza.
+   */
+  .scrim {
+    background-color: rgba(0, 0, 0, 0.72);
+  }
 
   /* ── Bottoni ────────────────────────────────────────────────────────────── */
 
@@ -106,8 +157,16 @@
    * `active:` su ogni pulsante: alla pressione l'elemento cede di un pixel.
    * È l'unico movimento che risponde al dito invece di annunciarsi da solo.
    */
+  /**
+   * Testo CHIARO sul riempimento d'accento, e non è una preferenza.
+   *
+   * Il blu del marchio con il nero della sala dà 3.93:1 e non passa; con
+   * l'inchiostro dà 4.64:1. `check-contrast.mjs` misura questa coppia esatta,
+   * quindi le due righe non possono divergere — ed è la stessa misura, presa
+   * su un'ambra, che qui imponeva il contrario.
+   */
   .btn-primary {
-    @apply bg-accent text-white font-medium
+    @apply bg-accent text-ink font-semibold
            transition-[background-color,transform] duration-150 active:translate-y-px;
   }
   .btn-primary:hover:not(:disabled) {
@@ -125,11 +184,11 @@
    * quando lo cerchi, non prima.
    */
   .btn-secondary {
-    @apply border border-line text-ink-muted font-medium
+    @apply border border-line-control text-ink-muted font-medium
            transition-[background-color,border-color,color,transform] duration-150 active:translate-y-px;
   }
   .btn-secondary:hover:not(:disabled) {
-    @apply border-line-strong text-ink;
+    @apply border-ink-dim text-ink;
   }
   .btn-secondary:disabled {
     @apply opacity-40 cursor-not-allowed active:translate-y-0;
@@ -144,13 +203,23 @@
 
   /* ── Campi ──────────────────────────────────────────────────────────────── */
 
+  /**
+   * Il bordo è `line.control`, non `line`.
+   *
+   * Con `line` (#201F28) il rapporto col fondo del campo era 1.15:1: un campo
+   * il cui bordo non si vede non ha un bordo, e WCAG 1.4.11 chiede 3:1 proprio
+   * perché è la linea, lì, a dire dove si può scrivere. Il controllo dei
+   * contrasti verifica questa coppia; prima la verificava con la soglia
+   * abbassata a 1.5, che è un modo di spegnere un controllo lasciandone acceso
+   * l'aspetto.
+   */
   .input-field {
-    @apply w-full bg-surface-sunken border border-line rounded-md px-3.5 py-2.5
+    @apply w-full bg-surface-sunken border border-line-control rounded-md px-3.5 py-2.5
            text-sm text-ink placeholder:text-ink-dim outline-none
            transition-[color,background-color,border-color,box-shadow] duration-150;
   }
   .input-field:hover:not(:focus):not(:disabled) {
-    @apply border-line-strong;
+    @apply border-ink-dim;
   }
   .input-field:focus {
     @apply border-accent;
@@ -190,10 +259,19 @@
     @apply text-micro font-medium uppercase tracking-[0.11em] text-ink-dim;
   }
 
-  /** La voce: nomi di personaggi e titoli. Serif, corpo ottico attivo. */
-  .title-serif {
-    @apply font-display font-medium text-ink;
-    font-optical-sizing: auto;
+  /**
+   * L'INSEGNA: nomi di personaggi e titoli di pagina.
+   *
+   * Sostituisce `.title-display`. Il peso è alto e la larghezza compressa: alle
+   * misure `display-*` è ciò che fa leggere un nome come un cartellone invece
+   * che come un'intestazione. `font-bold` era usato 28 volte a mano contro le
+   * 7 di `.title-display`, quindi i titoli avevano due pesi diversi a seconda
+   * della pagina: qui il peso lo porta la classe, una volta sola.
+   */
+  .title-display {
+    @apply font-display font-bold text-ink;
+    font-variation-settings: 'wdth' 80;
+    text-transform: none;
   }
 
   /**
@@ -267,16 +345,19 @@
    * diverse. È il motivo per cui la galleria sembrava rumorosa anche a
    * interfaccia pulita.
    *
-   * Desaturare e scurire appena li porta tutti nella stessa stanza, come fa
-   * una rivista quando uniforma le immagini di un servizio. Al passaggio del
-   * mouse il colore torna: è la ricompensa per aver guardato.
+   * «Rivista» li desaturava appena, per uniformarli come fa una rivista con le
+   * immagini di un servizio. «Notturno» spinge oltre nella stessa direzione e
+   * per una ragione diversa: alza il contrasto e toglie quasi tutto il colore,
+   * così un ritratto sembra illuminato da una sorgente sola — che è ciò che
+   * accade in una sala buia. Al passaggio del mouse il colore rientra caldo:
+   * è la ricompensa per aver guardato.
    */
   .portrait {
-    filter: saturate(0.72) brightness(0.92) contrast(1.04);
-    transition: filter 0.3s cubic-bezier(0.2, 0, 0, 1);
+    filter: contrast(1.14) saturate(0.58) brightness(0.86);
+    transition: filter 0.35s cubic-bezier(0.2, 0, 0, 1);
   }
   .group:hover .portrait {
-    filter: saturate(1) brightness(1) contrast(1);
+    filter: contrast(1.04) saturate(1) brightness(1);
   }
 }
 

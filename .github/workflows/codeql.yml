@@ -1,0 +1,45 @@
+# Analisi statica di sicurezza.
+#
+# La CI aveva già `npm audit`, che guarda le DIPENDENZE, e 320 test, che
+# guardano il comportamento atteso. Restava scoperto il codice scritto qui:
+# nessuno strumento leggeva questi file cercando iniezioni, percorsi non
+# validati o dati che vanno dove non dovrebbero.
+#
+# Non sostituisce la revisione a mano — l'audit che ha prodotto le correzioni
+# S1-S15 ha trovato cose che CodeQL non trova, come un privilegio concesso in
+# base a un'email mai verificata. Trova l'altra metà: quella meccanica, che si
+# reintroduce per distrazione e a cui nessuno guarda due volte.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Le vulnerabilità nuove riguardano codice vecchio: una passata settimanale
+    # anche senza modifiche.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analizza:
+    name: Analisi statica
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # `security-and-quality` invece del solo `security`: include i difetti
+          # di correttezza che diventano difetti di sicurezza, come un confronto
+          # che non fa quello che sembra.
+          queries: security-and-quality
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript

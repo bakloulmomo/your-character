@@ -73,6 +73,39 @@ const exportLimiter = build({
 });
 
 /**
+ * Limite sulla RICERCA del catalogo.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `GET /api/characters?search=...` esegue tre `$regex` non ancorate e senza
+ * distinzione di maiuscole su `name`, `description` e `tags`. Un'espressione
+ * regolare non ancorata non puo' usare un indice: e' una scansione completa
+ * della collezione, per richiesta.
+ *
+ * La rotta e' PUBBLICA e non autenticata, quindi finora l'unico freno era il
+ * limite generale — 240 richieste al minuto, che per una scansione completa
+ * sono 240 scansioni al minuto da un solo indirizzo. Non serve un attacco:
+ * basta uno script di scraping mal scritto per mettere in ginocchio un M0.
+ *
+ * Trenta al minuto restano molto piu' di quanto una persona digiti davvero, e
+ * fermano lo script che non si e' accorto di essere uno script. Chi sfoglia il
+ * catalogo senza cercare non passa di qui: `skip` conta solo le richieste che
+ * portano davvero un termine.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+const searchLimiter = build({
+  windowMs: 60 * 1000,
+  max: Number.parseInt(process.env.SEARCH_RATE_MAX, 10) || 30,
+  message: 'Troppe ricerche in poco tempo. Attendi qualche istante.'
+});
+
+/** Applica il limite solo quando c'e' davvero un termine da cercare. */
+const searchGuard = (req, res, next) => {
+  const term = String(req.query.search || '').trim();
+  if (!term) return next();
+  return searchLimiter(req, res, next);
+};
+
+/**
  * Limite GENERALE su tutta la API.
  *
  * I limitatori qui sopra coprono le rotte che costano denaro. Ma le rotte di
@@ -93,6 +126,7 @@ const globalLimiter = build({
 
 module.exports = {
   globalLimiter,
+  searchGuard,
   messageLimiter,
   imageLimiter,
   createCharacterLimiter,

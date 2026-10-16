@@ -33,7 +33,17 @@ const REDACTED = [
   'passwordHash',
   'token',
   'clientSecret',
-  'stripe-signature'
+  'stripe-signature',
+  /**
+   * Il corpo di un'email (S8). `token` come chiave non basta: il segreto del
+   * recupero password viaggiava DENTRO il valore di `text`, sotto forma di URL,
+   * e nessuna redazione per nome di campo lo vedeva. Qui la difesa è per
+   * costruzione — il corpo non si logga mai, qualunque cosa contenga — e
+   * `mailService.js` non lo passa più comunque: due difese, perché la prossima
+   * chiamata a `logger` con un corpo di messaggio dentro non è prevedibile.
+   */
+  'text',
+  '*.text'
 ];
 
 const prettyAvailable = () => {

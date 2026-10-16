@@ -66,6 +66,7 @@ describe('cronologia delle conversazioni', () => {
       User.deleteMany({}), Chat.deleteMany({}), Character.deleteMany({}), Message.deleteMany({})
     ]);
     user = await User.create({
+    emailVerifiedAt: new Date(),
       email: 'anna@example.com', username: 'anna', birthdate: new Date('1990-01-01')
     });
     token = tokenFor(user);
@@ -136,6 +137,7 @@ describe('cronologia delle conversazioni', () => {
       // Il personaggio è di QUALCUN ALTRO ed è pubblico: sopravvive alla
       // cancellazione, quindi il suo contatore resterebbe gonfio per sempre.
       const altro = await User.create({
+    emailVerifiedAt: new Date(),
         email: 'bruno@example.com', username: 'bruno', birthdate: new Date('1988-05-05')
       });
       const suo = await makeCharacter(altro, { name: 'Marcus Vance' });

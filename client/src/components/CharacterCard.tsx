@@ -57,11 +57,18 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
    * È un'informazione che riguarda il proprietario e compare solo a lui, in
    * «I miei personaggi». Non merita un badge che urla in una galleria.
    */
+  /**
+   * Resta un solo stato da segnalare: «Rimosso».
+   *
+   * C'era anche «In revisione», per i personaggi pubblici in attesa di
+   * approvazione. Quello stato non esiste più: un personaggio pubblico è
+   * visibile appena creato, e la revisione umana avviene dopo, su ciò che è già
+   * online. Un'etichetta che dicesse «in revisione» accanto a un personaggio
+   * che chiunque può già aprire direbbe una cosa falsa all'autore.
+   */
   const status =
-    character.isPublic && character.moderationStatus === 'pending' ? (
-      <span className="text-micro font-medium text-warning">In revisione</span>
-    ) : character.isPublic && character.moderationStatus === 'rejected' ? (
-      <span className="text-micro font-medium text-danger">Respinto</span>
+    character.isPublic && character.moderationStatus === 'rejected' ? (
+      <span className="text-micro font-medium text-danger">Rimosso</span>
     ) : null;
 
   /**
@@ -91,7 +98,7 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
         <div className="relative mb-3 aspect-[3/4] overflow-hidden rounded-lg bg-surface">
           <Avatar src={character.avatar} name={character.name} size={256} fill className="portrait" />
         </div>
-        <h3 className="title-serif truncate text-base leading-snug">{character.name}</h3>
+        <h3 className="title-display truncate text-base leading-snug">{character.name}</h3>
         <p className="mt-1 line-clamp-2 text-xs leading-snug text-ink-muted">{character.description}</p>
       </Link>
     );
@@ -108,7 +115,7 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
           <Avatar src={character.avatar} name={character.name} size={56} fill className="portrait" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="title-serif truncate text-base leading-snug transition-colors group-hover:text-accent-glow">
+          <h3 className="title-display truncate text-base leading-snug transition-colors group-hover:text-accent-glow">
             {character.name}
           </h3>
           <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-ink-muted">{character.description}</p>
@@ -145,7 +152,7 @@ export default function CharacterCard({ character, variant = 'grid' }: Props) {
       </div>
 
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="title-serif truncate text-display-sm transition-colors group-hover:text-accent-glow">
+        <h3 className="title-display truncate text-display-sm transition-colors group-hover:text-accent-glow">
           {character.name}
         </h3>
         {status}

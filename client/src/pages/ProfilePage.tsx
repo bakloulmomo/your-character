@@ -1,12 +1,26 @@
-import { Link } from 'react-router-dom';
 import { Plus, Sparkles, Coins, Settings } from 'lucide-react';
 import { useMyCharacters } from '../hooks/useCharacters';
 import { useStore } from '../store/useStore';
 import CharacterCard from '../components/CharacterCard';
 import Avatar from '../components/ui/Avatar';
+import { Button, ButtonLink } from '../components/ui/Button';
+import { PageContainer, PageHeader, Stat } from '../components/ui/Page';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
+/**
+ * Il profilo.
+ *
+ * Era la pagina più generica del prodotto: tre tessere bordate in fila —
+ * crediti, piano, uso di oggi — ognuna `rounded-xl border border-line
+ * bg-surface p-4` con dentro un numero in `title-display text-display-md`,
+ * una misura che non apparteneva nemmeno alla scala. È il pattern «cruscotto»
+ * che qualunque generatore produce per primo, e non aggiunge nulla ai tre
+ * numeri che contiene: aggiunge solo dodici bordi.
+ *
+ * Qui i numeri stanno su una riga, separati da un filo, e la gerarchia la fanno
+ * il corpo del testo e lo spazio. Le stesse tre informazioni, senza le scatole.
+ */
 export default function ProfilePage() {
   useDocumentTitle('Il tuo profilo');
   const { user, setAuthModalOpen, setBuyCreditsModalOpen, features } = useStore();
@@ -17,9 +31,9 @@ export default function ProfilePage() {
       <EmptyState
         title="Accedi per vedere il tuo profilo"
         action={
-          <button onClick={() => setAuthModalOpen(true, 'login')} className="btn-primary rounded-xl px-4 py-2 text-sm">
+          <Button variant="primary" onClick={() => setAuthModalOpen(true, 'login')}>
             Accedi
-          </button>
+          </Button>
         }
       />
     );
@@ -29,64 +43,55 @@ export default function ProfilePage() {
     user.subscription === 'monthly' ? 'Mensile' : user.subscription === 'annual' ? 'Annuale' : 'Gratuito';
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 md:px-8">
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <Avatar src={user.avatar} name={user.username} size={64} rounded="full" />
-          <div>
-            <h1 className="font-display text-2xl font-bold text-ink">@{user.username}</h1>
-            <p className="text-sm text-ink-muted">{user.email}</p>
-          </div>
-        </div>
+    <PageContainer>
+      <PageHeader
+        media={<Avatar src={user.avatar} name={user.username} size={72} rounded="full" />}
+        eyebrow="Il tuo account"
+        title={`@${user.username}`}
+        description={user.email}
+        actions={
+          <ButtonLink to="/settings">
+            <Settings className="h-4 w-4" aria-hidden="true" /> Impostazioni
+          </ButtonLink>
+        }
+      />
 
-        <Link to="/settings" className="btn-secondary flex items-center gap-1.5 self-start rounded-xl px-4 py-2 text-sm">
-          <Settings className="h-4 w-4" aria-hidden="true" /> Impostazioni
-        </Link>
-      </header>
-
-      {/* Riepilogo del piano */}
-      <div className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-line bg-surface p-4">
-          <p className="eyebrow">Crediti</p>
-          <p className="mt-1 font-display text-2xl font-bold text-ink">{user.credits}</p>
-          {/* Un bersaglio da 60x16 px non si centra con un dito. Il testo resta
-              lo stesso, l'area attivabile diventa toccabile. */}
-          {features.payments ? (
-            <button
-              onClick={() => setBuyCreditsModalOpen(true)}
-              className="-ml-2 mt-1 flex min-h-[36px] items-center gap-1.5 rounded-lg px-2 text-xs text-accent-glow transition-colors hover:bg-accent-wash"
-            >
-              <Coins className="h-3.5 w-3.5" aria-hidden="true" /> Ricarica
-            </button>
-          ) : (
-            <p className="mt-2 text-xs text-ink-dim">Crediti della beta</p>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-line bg-surface p-4">
-          <p className="eyebrow">Piano</p>
-          <p className="mt-1 font-display text-2xl font-bold text-ink">{planLabel}</p>
-          {user.subscription !== 'free' && user.subscriptionExpiresAt && (
-            <p className="mt-2 text-xs text-ink-dim">
-              Attivo fino al {new Date(user.subscriptionExpiresAt).toLocaleDateString('it-IT')}
-            </p>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-line bg-surface p-4">
-          <p className="eyebrow">Uso di oggi</p>
-          <p className="mt-1 font-display text-2xl font-bold text-ink">{user.dailyMessageCount}</p>
-          <p className="mt-2 text-xs text-ink-dim">messaggi inviati</p>
-        </div>
+      {/* Le tre cifre che contano, su un filo invece che dentro tre riquadri. */}
+      <div className="rule grid grid-cols-2 gap-x-8 gap-y-8 pt-7 sm:grid-cols-3">
+        <Stat
+          label="Crediti"
+          value={user.credits}
+          hint={
+            features.payments ? (
+              /* Un bersaglio da 60×16 px non si centra con un dito: l'altezza
+                 minima la porta ora il componente, per tutti i pulsanti. */
+              <Button variant="ghost" size="sm" className="-ml-3" onClick={() => setBuyCreditsModalOpen(true)}>
+                <Coins className="h-3.5 w-3.5" aria-hidden="true" /> Ricarica
+              </Button>
+            ) : (
+              'Crediti della beta'
+            )
+          }
+        />
+        <Stat
+          label="Piano"
+          value={planLabel}
+          hint={
+            user.subscription !== 'free' && user.subscriptionExpiresAt
+              ? `Attivo fino al ${new Date(user.subscriptionExpiresAt).toLocaleDateString('it-IT')}`
+              : undefined
+          }
+        />
+        <Stat label="Uso di oggi" value={user.dailyMessageCount} hint="messaggi inviati" />
       </div>
 
       {/* Personaggi creati — l'endpoint esisteva e non era mai stato collegato */}
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">I miei personaggi</h2>
-          <Link to="/create" className="btn-secondary flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs">
+      <section className="mt-16">
+        <div className="rule mb-7 flex items-baseline justify-between gap-4 pt-5">
+          <h2 className="title-display text-display-sm">I miei personaggi</h2>
+          <ButtonLink to="/create" size="sm">
             <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Nuovo
-          </Link>
+          </ButtonLink>
         </div>
 
         {status === 'loading' && <CardSkeleton count={3} />}
@@ -97,18 +102,22 @@ export default function ProfilePage() {
             icon={<Sparkles className="h-7 w-7" />}
             title="Non hai ancora creato nessun personaggio"
             description="Creane uno: puoi tenerlo privato o pubblicarlo in galleria."
-            action={<Link to="/create" className="btn-primary rounded-xl px-4 py-2 text-sm">Crea il primo</Link>}
+            action={
+              <ButtonLink to="/create" variant="primary">
+                Crea il primo
+              </ButtonLink>
+            }
           />
         )}
 
         {status === 'ready' && characters.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-x-8 gap-y-14 [grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))]">
             {characters.map((c) => (
               <CharacterCard key={c._id} character={c} />
             ))}
           </div>
         )}
       </section>
-    </div>
+    </PageContainer>
   );
 }

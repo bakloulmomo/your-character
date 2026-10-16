@@ -66,9 +66,21 @@ jobs:
 
       - name: Audit delle dipendenze
         working-directory: server
-        # `--audit-level=high` per non bloccare su segnalazioni minori delle
-        # dipendenze di sviluppo; le vulnerabilità gravi devono fermare tutto.
-        run: npm audit --audit-level=high
+        # `moderate`, non `high`. Le vulnerabilità medie sono quelle che
+        # restano aperte per mesi proprio perché nessuna soglia le nomina, e
+        # abbassando la soglia questa volta ne sono uscite tre reali: `qs` con
+        # un DoS e un aggiramento del limite sugli array, raggiungibile
+        # attraverso `express.urlencoded({extended:true})` — cioè esattamente
+        # l'impostazione da cui passa l'iniezione di operatori nella
+        # querystring. Risolte con un `override` in package.json.
+        #
+        # Il secondo `override` è `js-yaml`, raggiunto SOLO in sviluppo
+        # (`jest → babel-plugin-istanbul → @istanbuljs/load-nyc-config`) e
+        # quindi mai in esecuzione su un server. Non è stato escluso con
+        # `--omit=dev`: una vulnerabilità che gira sulla macchina di chi
+        # sviluppa e sui runner della CI resta una vulnerabilità, e la soglia
+        # serve proprio a non lasciar decidere caso per caso se ignorarla.
+        run: npm audit --audit-level=moderate
 
   client:
     name: Client — lint, tipi, build e test
@@ -105,13 +117,28 @@ jobs:
         working-directory: client
         run: npm run check:css
 
+      # I due controlli che il sistema di design ha su di sé, e che finora
+      # NON giravano qui: `check:contrast` esisteva soltanto dentro
+      # `npm run verify`, che nessun job invocava. Cioè la tavolozza era
+      # protetta da uno script che in CI non veniva mai eseguito.
+      - name: Verifica dei contrasti (WCAG)
+        working-directory: client
+        run: npm run check:contrast
+
+      # Il gate anti-deriva. «Rivista» non è fallito per mancanza di regole:
+      # è fallito perché nulla le applicava, e alla fine nove pagine su
+      # quattordici usavano i pattern che i suoi commenti dichiaravano aboliti.
+      - name: Verifica della scala e della tavolozza
+        working-directory: client
+        run: npm run check:scale
+
       - name: Test dell'interfaccia
         working-directory: client
         run: npm test
 
       - name: Audit delle dipendenze
         working-directory: client
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=moderate
 
   e2e:
     name: End-to-end

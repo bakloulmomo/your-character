@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  MessageSquare, ShieldAlert, Share2, Pencil, Trash2, ArrowLeft, Plus, Loader2, UserX, EyeOff, Clock3
+  MessageSquare, ShieldAlert, Share2, Pencil, Trash2, ArrowLeft, Plus, Loader2, UserX, EyeOff
 } from 'lucide-react';
 import api from '../services/api';
 import { useCharacter } from '../hooks/useCharacters';
 import { useChats } from '../hooks/useChats';
 import { useStore, normalizeChat } from '../store/useStore';
 import Avatar from '../components/ui/Avatar';
-import Modal from '../components/ui/Modal';
 import { EmptyState, ErrorState, Spinner } from '../components/ui/States';
 import { formatCount, relativeTime } from '../lib/format';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { errorMessage } from '../lib/apiError';
+import { Button } from '../components/ui/Button';
+import { PageContainer } from '../components/ui/Page';
+import { Badge } from '../components/ui/Page';
 
 /**
  * Scheda del personaggio — la pagina che mancava.
@@ -26,9 +28,8 @@ export default function CharacterPage() {
   const navigate = useNavigate();
   const { character, status } = useCharacter(id);
   const { chats, reload: reloadChats } = useChats();
-  const { user, setAuthModalOpen, setReportModalOpen, notify, upsertChat } = useStore();
+  const { user, setAuthModalOpen, setReportModalOpen, notify, upsertChat, askConfirm } = useStore();
   const [starting, setStarting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Prima di ogni ritorno anticipato: gli hook non possono stare sotto un `if`.
   useDocumentTitle(character?.name);
@@ -41,7 +42,7 @@ export default function CharacterPage() {
         icon={<UserX className="h-7 w-7" />}
         title="Personaggio non trovato"
         description="Potrebbe essere stato eliminato, oppure è privato e appartiene a qualcun altro."
-        action={<Link to="/" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
+        action={<Link to="/discover" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
       />
     );
   }
@@ -103,6 +104,21 @@ export default function CharacterPage() {
   };
 
   const remove = async () => {
+    /**
+     * La conferma arriva dal dialogo condiviso.
+     *
+     * Qui ce n'era una scritta a mano — corretta, per giunta: usava il modale
+     * condiviso, chiudeva con Esc, intrappolava il focus. Il problema non era
+     * la sua qualità, era che esisteva solo qui: eliminare un messaggio, una
+     * conversazione o disconnettersi non chiedevano niente a nessuno.
+     */
+    const conferma = await askConfirm({
+      title: `Sei sicuro di voler eliminare ${character.name}?`,
+      description:
+        'Verranno eliminate anche tutte le conversazioni collegate. L\'operazione non è reversibile.'
+    });
+    if (!conferma) return;
+
     try {
       const res = await api.delete(`/characters/${character._id}`);
       const removed = res.data?.deletedChats ?? 0;
@@ -120,31 +136,39 @@ export default function CharacterPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-8">
-      <button onClick={() => navigate(-1)} className="btn-ghost mb-6 flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm">
+    <PageContainer width="prose">
+      <Button variant="ghost" size="sm" className="-ml-3 mb-7" onClick={() => navigate(-1)}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Indietro
-      </button>
+      </Button>
 
       <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start">
         <Avatar src={character.avatar} name={character.name} size={112} rounded="2xl" />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-display text-2xl font-bold text-ink">{character.name}</h1>
+            <h1 className="title-display text-display-md">{character.name}</h1>
             {character.isNSFW && (
               <span className="rounded-lg bg-danger/15 px-2 py-0.5 text-micro font-bold text-danger">18+</span>
             )}
             {!character.isPublic && (
               <span className="rounded-lg bg-surface px-2 py-0.5 text-micro font-medium text-ink-muted">Privato</span>
             )}
-            {character.isPublic && character.moderationStatus === 'pending' && (
-              <span className="inline-flex items-center gap-1 rounded-lg border border-warning/40 bg-warning/10 px-2 py-0.5 text-micro font-medium text-warning">
-                <Clock3 className="h-3 w-3" aria-hidden="true" /> In revisione
-              </span>
-            )}
+            {/**
+              * «In revisione» è sparito, e la ragione è che diceva il falso.
+              *
+              * L'etichetta compariva per `moderationStatus === 'pending'`. Con
+              * la moderazione successiva quello stato non viene più assegnato:
+              * un personaggio pubblico è online appena creato. Ma i personaggi
+              * creati PRIMA del cambiamento sono rimasti `pending` in database,
+              * e continuavano a mostrare «In revisione» accanto a un
+              * personaggio che chiunque poteva già aprire — l'unica etichetta
+              * che l'autore vede, e diceva l'esatto contrario della verità.
+              *
+              * Resta solo lo stato che cambia davvero qualcosa: rimosso.
+              */}
             {character.isPublic && character.moderationStatus === 'rejected' && (
               <span className="rounded-lg border border-danger/40 bg-danger/10 px-2 py-0.5 text-micro font-medium text-danger">
-                Respinto
+                Rimosso
               </span>
             )}
           </div>
@@ -152,16 +176,11 @@ export default function CharacterPage() {
           {/* La decisione della moderazione va comunicata all'autore, con la
               sua motivazione: un personaggio che sparisce senza spiegazione è
               indistinguibile da un guasto. */}
-          {isOwner && character.isPublic && character.moderationStatus === 'pending' && (
-            <p className="mt-3 rounded-xl border border-warning/40 bg-warning/10 p-3 text-xs text-ink-muted">
-              In attesa di revisione: per ora lo vedi solo tu. Comparirà in galleria una volta approvato.
-            </p>
-          )}
           {isOwner && character.moderationStatus === 'rejected' && (
-            <p className="mt-3 rounded-xl border border-danger/40 bg-danger/10 p-3 text-xs text-ink-muted">
-              <strong className="text-danger">Non approvato.</strong>{' '}
-              {character.moderationReason || 'Nessuna motivazione registrata.'} Puoi modificarlo e
-              rimandarlo in revisione.
+            <p className="mt-3 rounded-lg border border-danger/40 bg-danger/10 p-3 text-xs text-ink-muted">
+              <strong className="text-danger">Rimosso dalla galleria.</strong>{' '}
+              {character.moderationReason || 'Nessuna motivazione registrata.'} Puoi modificarlo per
+              chiedere un riesame: resta fuori dalla galleria finché qualcuno non lo guarda.
             </p>
           )}
 
@@ -181,9 +200,7 @@ export default function CharacterPage() {
           {character.tags?.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {character.tags.map((tag) => (
-                <span key={tag} className="rounded-lg bg-accent-wash px-2 py-0.5 text-micro font-medium text-accent-glow">
-                  {tag}
-                </span>
+                <Badge key={tag}>{tag}</Badge>
               ))}
             </div>
           )}
@@ -214,7 +231,7 @@ export default function CharacterPage() {
               <Pencil className="h-4 w-4" aria-hidden="true" /> Modifica
             </Link>
             <button
-              onClick={() => setConfirmDelete(true)}
+              onClick={remove}
               className="flex items-center gap-1.5 rounded-xl border border-danger/40 px-4 py-2.5 text-sm text-danger transition-colors hover:bg-danger/10"
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" /> Elimina
@@ -255,33 +272,6 @@ export default function CharacterPage() {
         </section>
       )}
 
-      {/**
-        * Usa il modale condiviso, come tutte le altre finestre dell'app.
-        *
-        * Quello scritto qui a mano non si chiudeva con Esc, non intrappolava il
-        * focus e non lo restituiva a chi l'aveva aperto — e stava a `z-50`,
-        * cioè lo STESSO livello del banner dei cookie: a parità di livello
-        * vince chi viene dopo nel DOM, e il banner viene dopo. Chi apriva
-        * questa conferma prima di rispondere ai cookie si trovava il pulsante
-        * «Elimina definitivamente» perfettamente visibile e non cliccabile.
-        * È il difetto già corretto per il campo della chat e per gli altri
-        * modali, rimasto qui perché qui il modale condiviso non era usato.
-        */}
-      <Modal
-        open={confirmDelete}
-        onClose={() => setConfirmDelete(false)}
-        title={`Eliminare ${character.name}?`}
-      >
-        <p className="text-sm text-ink-muted">
-          Verranno eliminate anche tutte le conversazioni collegate. L'operazione non è reversibile.
-        </p>
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={() => setConfirmDelete(false)} className="btn-secondary rounded-xl px-4 py-2 text-sm">Annulla</button>
-          <button onClick={remove} className="rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/85">
-            Elimina definitivamente
-          </button>
-        </div>
-      </Modal>
-    </div>
+    </PageContainer>
   );
 }

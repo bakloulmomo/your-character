@@ -91,7 +91,7 @@ export default function CookieBanner() {
         role="region"
         aria-label="Informativa cookie"
       >
-        <div ref={panelRef} className="glass-panel animate-slide-up flex items-center gap-3 rounded-xl border p-3 shadow-2xl">
+        <div ref={panelRef} className="glass-panel animate-slide-up flex items-center gap-3 rounded-lg border p-3 shadow-overlay">
           <Cookie className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
           <p className="flex-1 text-xs leading-relaxed text-ink-muted">
             Usiamo solo cookie tecnici, per tenere aperta la sessione.{' '}
@@ -114,7 +114,7 @@ export default function CookieBanner() {
       role="region"
       aria-label="Informativa cookie"
     >
-      <div ref={panelRef} className="glass-panel animate-slide-up space-y-3 rounded-xl border p-4 shadow-2xl">
+      <div ref={panelRef} className="glass-panel animate-slide-up space-y-3 rounded-lg border p-4 shadow-overlay">
         <div className="flex items-center gap-2">
           <Cookie className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
           <h2 className="text-sm font-semibold text-ink">Cookie e script di terze parti</h2>

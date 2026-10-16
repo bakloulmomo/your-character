@@ -60,10 +60,14 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
       User.deleteMany({}), Character.deleteMany({}), Chat.deleteMany({}), Report.deleteMany({})
     ]);
 
-    author = await User.create({ email: 'autore@example.com', username: 'autore', birthdate: yearsAgo(30) });
-    reader = await User.create({ email: 'lettore@example.com', username: 'lettore', birthdate: yearsAgo(30) });
-    moderator = await User.create({ email: 'mod@example.com', username: 'moderatore', role: 'moderator', birthdate: yearsAgo(35) });
-    minor = await User.create({ email: 'giovane@example.com', username: 'giovane', birthdate: yearsAgo(15) });
+    author = await User.create({
+    emailVerifiedAt: new Date(), email: 'autore@example.com', username: 'autore', birthdate: yearsAgo(30) });
+    reader = await User.create({
+    emailVerifiedAt: new Date(), email: 'lettore@example.com', username: 'lettore', birthdate: yearsAgo(30) });
+    moderator = await User.create({
+    emailVerifiedAt: new Date(), email: 'mod@example.com', username: 'moderatore', role: 'moderator', birthdate: yearsAgo(35) });
+    minor = await User.create({
+    emailVerifiedAt: new Date(), email: 'giovane@example.com', username: 'giovane', birthdate: yearsAgo(15) });
 
     authorToken = tokenFor(author);
     readerToken = tokenFor(reader);
@@ -72,27 +76,75 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
   });
 
   // ---- S2-2 ----------------------------------------------------------------
-  describe('S2-2 — pubblicare richiede una revisione', () => {
-    it('un personaggio pubblico nasce in attesa e NON compare in galleria', async () => {
+  /**
+   * Moderazione SUCCESSIVA.
+   *
+   * Questo blocco verificava il comportamento opposto: un personaggio pubblico
+   * nasceva `pending` e restava invisibile finché una persona non lo approvava.
+   * Era la scelta prudente sulla carta, e nella pratica significava che nessuno
+   * vedeva mai i personaggi creati dagli altri — la coda non aveva un
+   * moderatore, perché il ruolo si concede solo fuori banda con accesso al
+   * database.
+   *
+   * Ciò che protegge resta e viene verificato qui sotto: il filtro automatico
+   * sui metadati continua a stare PRIMA del salvataggio, la rimozione funziona,
+   * e — questa è nuova — un personaggio rimosso non torna online modificandolo.
+   */
+  describe('S2-2 — un personaggio pubblico è visibile subito', () => {
+    it('compare in galleria appena creato, senza attendere nessuno', async () => {
       const created = await as(request(app).post('/api/characters'), authorToken)
         .send(characterPayload({ isPublic: true }));
 
       expect(created.status).toBe(201);
-      expect(created.body.moderationStatus).toBe('pending');
+      expect(created.body.moderationStatus).toBe('approved');
 
       const gallery = await request(app).get('/api/characters');
-      expect(gallery.body.characters).toHaveLength(0);
+      expect(gallery.body.characters).toHaveLength(1);
     });
 
-    it('ma resta visibile al suo autore, che deve poterlo ritrovare', async () => {
+    it('ed è raggiungibile da un altro utente registrato e da un anonimo', async () => {
       const created = await as(request(app).post('/api/characters'), authorToken)
         .send(characterPayload({ isPublic: true }));
 
-      const own = await as(request(app).get(`/api/characters/${created.body._id}`), authorToken);
-      expect(own.status).toBe(200);
+      const altroUtente = await as(request(app).get(`/api/characters/${created.body._id}`), readerToken);
+      expect(altroUtente.status).toBe(200);
 
-      const stranger = await as(request(app).get(`/api/characters/${created.body._id}`), readerToken);
-      expect(stranger.status).toBe(404);
+      const anonimo = await request(app).get(`/api/characters/${created.body._id}`);
+      expect(anonimo.status).toBe(200);
+    });
+
+    it('un personaggio rimosso sparisce dalla galleria', async () => {
+      const created = await as(request(app).post('/api/characters'), authorToken)
+        .send(characterPayload({ isPublic: true }));
+
+      await as(request(app).patch(`/api/admin/characters/${created.body._id}`), moderatorToken)
+        .send({ moderationStatus: 'rejected', moderationReason: 'Viola le regole della piattaforma.' });
+
+      const gallery = await request(app).get('/api/characters');
+      expect(gallery.body.characters).toHaveLength(0);
+
+      const terzo = await as(request(app).get(`/api/characters/${created.body._id}`), readerToken);
+      expect(terzo.status).toBe(404);
+    });
+
+    it('e NON torna online se l\'autore lo modifica', async () => {
+      // Senza questa regola la rimozione sarebbe un fastidio da aggirare
+      // cambiando una virgola.
+      const created = await as(request(app).post('/api/characters'), authorToken)
+        .send(characterPayload({ isPublic: true }));
+
+      await as(request(app).patch(`/api/admin/characters/${created.body._id}`), moderatorToken)
+        .send({ moderationStatus: 'rejected', moderationReason: 'Viola le regole della piattaforma.' });
+
+      const modificato = await as(request(app).put(`/api/characters/${created.body._id}`), authorToken)
+        .send(characterPayload({ isPublic: true, description: 'Una descrizione completamente riscritta dopo la rimozione.' }));
+
+      expect(modificato.body.moderationStatus).toBe('rejected');
+      // Ma torna in coda, così un moderatore può riesaminarlo.
+      expect(modificato.body.moderatedAt).toBeNull();
+
+      const gallery = await request(app).get('/api/characters');
+      expect(gallery.body.characters).toHaveLength(0);
     });
 
     it('un personaggio PRIVATO è approvato subito: non c\'è nulla da rivedere', async () => {
@@ -106,16 +158,55 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
       expect(chat.status).toBe(201);
     });
 
-    it('un personaggio in attesa non è chattabile da terzi', async () => {
+    /**
+     * Galleria e chat devono dire la stessa cosa.
+     *
+     * La regola di visibilità era scritta a mano in tre punti — la scheda, il
+     * filtro della galleria e la creazione di una conversazione. Cambiandola in
+     * due su tre, il difetto che ne usciva non somigliava alla sua causa: il
+     * personaggio compariva in galleria, si apriva, mostrava «Nuova
+     * conversazione», e il pulsante rispondeva 404. Ogni file letto da solo
+     * sembrava corretto.
+     */
+    it('ciò che si vede in galleria si può aprire E si può chattare', async () => {
       const created = await as(request(app).post('/api/characters'), authorToken)
         .send(characterPayload({ isPublic: true }));
+
+      const galleria = await request(app).get('/api/characters');
+      const inGalleria = galleria.body.characters.map((c) => c._id);
+      expect(inGalleria).toContain(created.body._id);
+
+      for (const id of inGalleria) {
+        const scheda = await as(request(app).get(`/api/characters/${id}`), readerToken);
+        expect(scheda.status).toBe(200);
+
+        const chat = await as(request(app).post('/api/chats'), readerToken).send({ characterId: id });
+        expect([201, 403]).toContain(chat.status); // 403 solo per il cancello d'età
+      }
+    });
+
+    it('un personaggio pubblico è chattabile da chiunque, subito', async () => {
+      const created = await as(request(app).post('/api/characters'), authorToken)
+        .send(characterPayload({ isPublic: true }));
+
+      const res = await as(request(app).post('/api/chats'), readerToken)
+        .send({ characterId: created.body._id });
+      expect(res.status).toBe(201);
+    });
+
+    it('un personaggio rimosso non è chattabile da terzi', async () => {
+      const created = await as(request(app).post('/api/characters'), authorToken)
+        .send(characterPayload({ isPublic: true }));
+
+      await as(request(app).patch(`/api/admin/characters/${created.body._id}`), moderatorToken)
+        .send({ moderationStatus: 'rejected', moderationReason: 'Viola le regole della piattaforma.' });
 
       const res = await as(request(app).post('/api/chats'), readerToken)
         .send({ characterId: created.body._id });
       expect(res.status).toBe(404);
     });
 
-    it('modificare un personaggio già approvato lo rimanda in coda', async () => {
+    it('modificare un personaggio già esaminato lo rimanda in coda, restando online', async () => {
       const created = await as(request(app).post('/api/characters'), authorToken)
         .send(characterPayload({ isPublic: true }));
 
@@ -123,9 +214,15 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
         .send({ moderationStatus: 'approved' });
 
       const updated = await as(request(app).put(`/api/characters/${created.body._id}`), authorToken)
-        .send(characterPayload({ isPublic: true, description: 'Una descrizione completamente riscritta dopo l approvazione.' }));
+        .send(characterPayload({ isPublic: true, description: 'Una descrizione completamente riscritta dopo l esame.' }));
 
-      expect(updated.body.moderationStatus).toBe('pending');
+      // Torna davanti a un moderatore...
+      expect(updated.body.moderatedAt).toBeNull();
+      // ...ma nel frattempo resta visibile: la revisione non blocca più nulla.
+      expect(updated.body.moderationStatus).toBe('approved');
+
+      const coda = await as(request(app).get('/api/admin/characters?status=da_rivedere'), moderatorToken);
+      expect(coda.body.characters).toHaveLength(1);
     });
   });
 
@@ -152,7 +249,7 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
       expect(res.body.characters[0].systemPrompt).toBeTruthy();
     });
 
-    it('l\'approvazione fa comparire il personaggio in galleria', async () => {
+    it('l\'esame lo toglie dalla coda e lo lascia in galleria', async () => {
       const created = await as(request(app).post('/api/characters'), authorToken)
         .send(characterPayload({ isPublic: true }));
 
@@ -166,6 +263,9 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
 
       const gallery = await request(app).get('/api/characters');
       expect(gallery.body.characters).toHaveLength(1);
+
+      const coda = await as(request(app).get('/api/admin/characters?status=da_rivedere'), moderatorToken);
+      expect(coda.body.characters).toHaveLength(0);
     });
 
     it('respingere senza motivazione non è ammesso', async () => {
@@ -339,7 +439,8 @@ describe('FASE D — Revisione, segnalazioni e contenuti per adulti', () => {
     });
 
     it('nemmeno chi non ha dichiarato una data di nascita', async () => {
-      const unknown = await User.create({ email: 'ignoto@example.com', username: 'ignoto' });
+      const unknown = await User.create({
+    emailVerifiedAt: new Date(), email: 'ignoto@example.com', username: 'ignoto' });
       const res = await as(request(app).patch('/api/users/me/preferences'), tokenFor(unknown))
         .send({ nsfwEnabled: true });
       expect(res.status).toBe(403);

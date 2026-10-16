@@ -15,7 +15,14 @@ import { test, expect, type Page } from '@playwright/test';
  */
 
 const PAGINE: Array<[percorso: string, nome: string]> = [
-  ['/', 'Scopri'],
+  // La radice non è più il catalogo: è la presentazione, e ha un guscio
+  // proprio (intestazione e piede di pagina invece della barra laterale).
+  ['/', 'Presentazione'],
+  ['/prezzi', 'Prezzi'],
+  ['/faq', 'Domande frequenti'],
+  ['/contatti', 'Contatti'],
+  ['/cookie-policy', 'Cookie'],
+  ['/discover', 'Scopri'],
   ['/search?q=aria', 'Cerca'],
   ['/character/650000000000000000000001', 'Scheda personaggio'],
   ['/create', 'Crea personaggio'],
@@ -141,7 +148,7 @@ test.describe('navigazione da tastiera', () => {
      * pulsante azioni. Senza il salto, raggiungere la pagina da tastiera
      * costava decine di tabulazioni a ogni cambio di pagina.
      */
-    await page.goto('/');
+    await page.goto('/discover');
     await page.keyboard.press('Tab');
 
     const attivo = await page.evaluate(() => ({

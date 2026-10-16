@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import api from './services/api';
 import { useStore } from './store/useStore';
@@ -14,7 +14,12 @@ import ModerationPage from './pages/ModerationPage';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-import { EmptyState } from './components/ui/States';
+import RouteError from './components/RouteError';
+import LandingPage from './pages/LandingPage';
+import PricingPage from './pages/PricingPage';
+import FaqPage from './pages/FaqPage';
+import ContactsPage from './pages/ContactsPage';
+import CookiePolicyPage from './pages/CookiePolicyPage';
 
 /**
  * Router reale con indirizzi propri.
@@ -23,40 +28,78 @@ import { EmptyState } from './components/ui/States';
  * pagina in una chat riportava alla home, il tasto indietro usciva dal sito e
  * nessuna schermata era condivisibile (S3-5).
  */
+/**
+ * Ogni rotta porta il proprio `errorElement`.
+ *
+ * Prima l'unica rete era l'`ErrorBoundary` attorno a tutta l'applicazione: un
+ * errore di render nella scheda di un personaggio portava via anche la barra
+ * laterale, la cronologia e la navigazione. Qui il guasto resta dentro l'area
+ * del contenuto e il guscio sopravvive, quindi si può andare altrove con un
+ * click invece di ricaricare.
+ *
+ * In un router «dati» come questo, un errore risale alla rotta più vicina che
+ * ne dichiara uno: senza questa riga su OGNI figlia, salirebbe fino al guscio.
+ */
+const conRete = (path: string, element: ReactNode) => ({ path, element, errorElement: <RouteError /> });
+
 const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShell />,
+    errorElement: <RouteError />,
     children: [
-      { index: true, element: <DiscoverPage /> },
-      { path: 'search', element: <SearchPage /> },
-      { path: 'character/:id', element: <CharacterPage /> },
-      { path: 'chat/:chatId', element: <ChatPage /> },
-      { path: 'create', element: <CreateCharacterPage /> },
-      { path: 'profile', element: <ProfilePage /> },
-      { path: 'settings', element: <SettingsPage /> },
+      /**
+       * Il catalogo si è spostato da `/` a `/discover`.
+       *
+       * `/` era la griglia dei personaggi: chi arrivava senza sapere che cos'è
+       * `your-character` trovava volti sconosciuti e nessuna frase che lo
+       * spiegasse. Ora `/` è la presentazione — fuori da questo guscio, perché
+       * una pagina di ingresso non ha bisogno della barra laterale né della
+       * cronologia di conversazioni che il visitatore non ha.
+       */
+      conRete('discover', <DiscoverPage />),
+      conRete('search', <SearchPage />),
+      conRete('character/:id', <CharacterPage />),
+      conRete('chat/:chatId', <ChatPage />),
+      conRete('create', <CreateCharacterPage />),
+      conRete('profile', <ProfilePage />),
+      conRete('settings', <SettingsPage />),
       // Coda di revisione: il server risponde 404 a chi non ha il ruolo,
       // quindi questa rotta è un ingresso, non un permesso.
-      { path: 'moderation', element: <ModerationPage /> },
-      {
-        path: '*',
-        element: (
-          <EmptyState
-            title="Pagina non trovata"
-            description="L'indirizzo che hai aperto non esiste."
-            action={<a href="/" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna alla home</a>}
-          />
-        )
-      }
+      conRete('moderation', <ModerationPage />),
+      // Un indirizzo inesistente è lo stesso schermo di un guasto, con un testo
+      // diverso: `RouteError` distingue i due casi da sé.
+      conRete('*', <RouteError />)
     ]
   },
+  /**
+   * Le pagine PUBBLICHE stanno fuori dal guscio dell'applicazione.
+   *
+   * Presentazione, prezzi, domande e contatti hanno un'intestazione e un piede
+   * di pagina propri (`MarketingLayout`): la barra laterale con «le tue chat»
+   * non ha senso per chi non ha ancora un account, e occuperebbe un quarto
+   * dello schermo per non dire niente.
+   */
+  { path: '/', element: <LandingPage />, errorElement: <RouteError /> },
+  { path: '/prezzi', element: <PricingPage />, errorElement: <RouteError /> },
+  { path: '/faq', element: <FaqPage />, errorElement: <RouteError /> },
+  { path: '/contatti', element: <ContactsPage />, errorElement: <RouteError /> },
+  { path: '/cookie-policy', element: <CookiePolicyPage />, errorElement: <RouteError /> },
+
   // Le pagine legali restano fuori dal guscio: sono documenti a sé.
-  { path: '/terms', element: <TermsPage /> },
+  { path: '/terms', element: <TermsPage />, errorElement: <RouteError /> },
   // Destinazione del link inviato per email: deve funzionare da sola, senza
   // che l'utente sia autenticato.
-  { path: '/reset-password', element: <ResetPasswordPage /> },
-  { path: '/privacy', element: <PrivacyPage /> },
-  { path: '/index.html', element: <Navigate to="/" replace /> }
+  { path: '/reset-password', element: <ResetPasswordPage />, errorElement: <RouteError /> },
+  { path: '/privacy', element: <PrivacyPage />, errorElement: <RouteError /> },
+  { path: '/index.html', element: <Navigate to="/" replace /> },
+  /**
+   * Chi ha salvato un segnalibro sulla vecchia radice-catalogo non deve
+   * trovarsi altrove senza spiegazione. `/pricing` c'è perché il piano di
+   * lavoro lo nominava in inglese, mentre ogni altro indirizzo del prodotto è
+   * in italiano: la pagina sta su `/prezzi` e questo è solo un rinvio.
+   */
+  { path: '/pricing', element: <Navigate to="/prezzi" replace /> }
 ]);
 
 export default function App() {

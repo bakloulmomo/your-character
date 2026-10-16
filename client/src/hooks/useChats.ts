@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
 import { useStore, normalizeChat } from '../store/useStore';
 
@@ -10,8 +10,11 @@ import { useStore, normalizeChat } from '../store/useStore';
  * personaggio creava una chat nuova e nessuna era più raggiungibile (S3-6).
  */
 export function useChats() {
-  const { chats, chatsStatus, setChats, setChatsStatus, setChatsLoadedFor, removeChat, notify } =
-    useStore();
+  const {
+    chats, chatsStatus, chatsCursor, chatsHasMore,
+    setChats, setChatsStatus, setChatsLoadedFor, appendChats, removeChat, notify
+  } = useStore();
+  const [loadingMore, setLoadingMore] = useState(false);
 
   /**
    * Solo l'identificativo, non l'intero oggetto utente.
@@ -38,11 +41,54 @@ export function useChats() {
     try {
       const res = await api.get('/chats');
       setChats((res.data ?? []).map((raw: any) => normalizeChat(raw)));
+      /**
+       * La continuazione arriva nelle intestazioni, non nel corpo.
+       *
+       * È una scelta del server: la risposta resta un array, così un client che
+       * non conosce la paginazione continua a funzionare. `useStore.setState`
+       * invece di un'azione dedicata perché qui si sta rimpiazzando l'elenco,
+       * non aggiungendo in coda.
+       */
+      // `?.` non è prudenza eccessiva: una risposta senza intestazioni —
+      // un'API dietro un proxy che le filtra, o un doppio dello strato di rete
+      // nei test — faceva lanciare qui, e la cronologia restava «in
+      // caricamento» per sempre senza che nulla dicesse perché.
+      useStore.setState({
+        chatsCursor: res.headers?.['x-next-cursor'] ?? null,
+        chatsHasMore: res.headers?.['x-has-more'] === 'true'
+      });
       setChatsStatus('ready');
     } catch {
       setChatsStatus('error');
     }
   }, [key, setChats, setChatsStatus, setChatsLoadedFor]);
+
+  /**
+   * La pagina successiva della cronologia.
+   *
+   * Il cursore è il `lastMessageAt` dell'ultima riga già ricevuta, non un
+   * numero di pagina: una conversazione che risale in cima mentre si sfoglia
+   * non fa saltare né duplicare le righe sotto — e quelle poche che
+   * ricomparirebbero comunque le toglie `appendChats`.
+   */
+  const loadMore = useCallback(async () => {
+    const { chatsCursor: cursore, chatsHasMore: altre } = useStore.getState();
+    if (!cursore || !altre || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const res = await api.get('/chats', { params: { before: cursore } });
+      appendChats(
+        (res.data ?? []).map((raw: any) => normalizeChat(raw)),
+        res.headers?.['x-next-cursor'] ?? null,
+        res.headers?.['x-has-more'] === 'true'
+      );
+    } catch {
+      notify('Non è stato possibile caricare altre conversazioni.', 'error');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [appendChats, notify, loadingMore]);
 
   useEffect(() => {
     /**
@@ -77,5 +123,5 @@ export function useChats() {
     [removeChat, notify]
   );
 
-  return { chats, status: chatsStatus, reload: load, deleteChat };
+  return { chats, status: chatsStatus, reload: load, deleteChat, loadMore, hasMore: chatsHasMore, loadingMore, cursor: chatsCursor };
 }

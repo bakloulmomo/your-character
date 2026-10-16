@@ -43,7 +43,7 @@ Variabili da inserire a mano:
 | `GEMINI_API_KEY` | dal passo 2 |
 | `FRONTEND_URL` | l'URL Vercel del passo 4 — **torna a compilarlo dopo** |
 | `BETA_INVITE_CODE` | il codice che darai agli invitati, es. `AMICI-2026` |
-| `ADMIN_EMAILS` | la tua email: al primo accesso diventi amministratore |
+| `ADMIN_EMAILS` | la tua email: ci arrivano le notifiche. **Non ti rende amministratore** |
 
 `JWT_SECRET` lo genera Render da sé (`generateValue: true`). Non copiarlo da
 nessuna parte e non riusarlo altrove.
@@ -95,9 +95,23 @@ curl -X POST https://IL-TUO-DOMINIO.vercel.app/api/auth/register \
 # atteso: 403 con requiresInvite
 ```
 
-Poi, dal browser: registrati col tuo indirizzo (quello in `ADMIN_EMAILS`), apri
-una conversazione, e verifica che **ricaricando la pagina resti connesso** — è la
-prova che il cookie attraversa la riscrittura.
+Poi, dal browser: registrati col tuo indirizzo, apri una conversazione, e
+verifica che **ricaricando la pagina resti connesso** — è la prova che il cookie
+attraversa la riscrittura.
+
+### Diventare amministratore
+
+Nessuna variabile d'ambiente concede il ruolo: un'email non è verificata, quindi
+non è un'identità. Dopo esserti registrato dall'interfaccia, da un terminale con
+l'URI di Atlas a portata:
+
+```bash
+cd server
+MONGODB_URI="<la stessa stringa messa su Render>" \
+  node scripts/grantRole.js tua@email.it admin
+```
+
+Esci e rientra: la voce «Moderazione» compare nella barra laterale.
 
 ## 6. Popolare la galleria
 
@@ -112,6 +126,77 @@ revisione, che approvi tu da `/moderation`.
 
 ---
 
+## 7. Posta — obbligatoria, non facoltativa
+
+**Senza un trasporto configurato il prodotto non è utilizzabile.** Non è più
+solo il recupero password: i codici di conferma non partono, e senza conferma
+nessuno può scrivere un messaggio, creare un personaggio o comprare crediti.
+
+Si sceglie **uno** dei due. Se `RESEND_API_KEY` è presente, vince Resend.
+
+### A) Resend — la scelta a regime
+
+Richiede un dominio verificato (SPF + DKIM). Piano gratuito: 3.000 email/mese.
+
+    RESEND_API_KEY=re_...
+    MAIL_FROM=no-reply@iltuodominio.it
+
+### B) SMTP — il ripiego finché il dominio non c'è
+
+Con Gmail servono la verifica in due passaggi attiva e una **password per le
+app** (myaccount.google.com → Sicurezza → Password per le app). **Mai** la
+password normale dell'account.
+
+    SMTP_HOST=smtp.gmail.com
+    SMTP_PORT=465
+    SMTP_USER=tuo.indirizzo@gmail.com
+    SMTP_PASS=xxxx xxxx xxxx xxxx
+    FEEDBACK_EMAIL=tuo.indirizzo@gmail.com
+
+**Limiti da conoscere prima di contarci.** Il mittente sarà l'indirizzo
+personale, il tetto è di qualche centinaio di messaggi al giorno, e senza
+SPF/DKIM allineati una parte dei codici finisce nella posta indesiderata —
+cioè proprio dove chi si è appena iscritto non li cerca.
+
+> **La soglia oltre cui il dominio non è più rimandabile:** più di ~30 iscritti
+> al giorno, oppure la prima segnalazione di un codice non arrivato. Da lì il
+> ripiego costa più utenti di quanti ne porti. La migrazione è una variabile
+> d'ambiente: si aggiunge `RESEND_API_KEY` e nient'altro cambia.
+
+### Verifica che la posta esca davvero
+
+    # Registrati dall'interfaccia con un indirizzo VERO e controlla di ricevere
+    # il codice a sei cifre. È l'unica prova che conta: nessun test la sostituisce.
+
+    # Poi manda un'opinione dall'app e controlla che arrivi a FEEDBACK_EMAIL.
+
+## 8. Backup — da fare prima che esistano utenti veri
+
+Su Atlas M0 **non esistono backup**: una cancellazione accidentale è definitiva.
+
+**Raccomandato:** passare Atlas a un piano con snapshot (~8-10 €/mese). È la
+soluzione vera: ripristino a un punto nel tempo, nessun segreto in GitHub.
+
+**Ripiego gratuito:** il workflow `.github/workflows/backup.yml` gira ogni
+notte. Servono due segreti nel repository (Settings → Secrets → Actions):
+
+| Segreto | Che cos'è |
+|---|---|
+| `MONGODB_URI_BACKUP` | Utenza Atlas di **sola lettura**, non quella dell'app |
+| `BACKUP_PASSPHRASE` | Frase lunga e casuale, custodita **fuori** da GitHub |
+
+### Il ripristino di prova — trimestrale, e va annotato qui
+
+Un backup mai ripristinato non è un backup. Ogni tre mesi:
+
+    gpg --decrypt backup-AAAAMMGG.archive.gpg > dump.archive
+    mongorestore --uri="<uri di un database VUOTO>" --archive=dump.archive --gzip
+    # Poi: contare utenti, personaggi e messaggi e confrontarli con la produzione.
+
+| Data della prova | Esito | Chi |
+|---|---|---|
+| _(da compilare alla prima prova)_ | | |
+
 ## Prima di aprire agli inviti
 
 - [ ] Hai aperto `/moderation` almeno una volta e sai com'è fatta
@@ -119,8 +204,18 @@ revisione, che approvi tu da `/moderation`.
       con contenuti 18+) e cosa fai se arriva qualcosa di illegale
 - [ ] Hai provato tu il percorso completo su un telefono, non solo sul portatile
 - [ ] Sai a chi scrivono gli invitati quando qualcosa non funziona
-- [ ] `RESEND_API_KEY` configurata, **oppure** hai accettato che il recupero
-      password non funzioni e lo dici agli invitati
+- [ ] **Posta configurata e provata con un indirizzo vero** — senza, nessuno può
+      scrivere ai personaggi (sezione 7)
+- [ ] **Backup attivi e un ripristino già provato** (sezione 8)
+- [ ] Se avevi già degli iscritti prima della verifica dell'email, li hai
+      confermati d'ufficio e lo hai annotato qui sotto:
+
+      MONGODB_URI="<uri>" node scripts/grandfatherVerified.js --dry-run
+      MONGODB_URI="<uri>" node scripts/grandfatherVerified.js
+
+      | Data | Account confermati | Motivo |
+      |---|---|---|
+      | _(da compilare)_ | | Beta chiusa a invito, verifica introdotta dopo |
 
 ## Cosa NON è ancora attivo, e perché
 
@@ -146,4 +241,7 @@ righe di quella richiesta, con i segreti già redatti.
 | Login riuscito ma disconnesso al ricaricamento | La riscrittura in `vercel.json` punta ancora all'host di esempio |
 | Le chiamate API danno 404 | Stessa causa |
 | Risposte «simulate — nessun credito addebitato» | `GEMINI_API_KEY` mancante o segnaposto |
+| «Conferma il tuo indirizzo» e il codice non arriva | Nessun trasporto di posta configurato (sezione 7). Il pannello `/api/admin/metrics` conta le email non recapitate sotto `mail.failed` |
+| Le opinioni non arrivano nella casella | `FEEDBACK_EMAIL` non impostata: restano comunque in database, `GET /api/feedback` |
+| `/health` risponde 503 | Il database non è raggiungibile — ora la sonda lo dice invece di fingere che vada tutto bene |
 | Prima richiesta lentissima dopo una pausa | Piano gratuito Render, è previsto |

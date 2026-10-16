@@ -7,6 +7,8 @@ import Avatar from '../components/ui/Avatar';
 import { Spinner } from '../components/ui/States';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { errorMessage } from '../lib/apiError';
+import { PageContainer } from '../components/ui/Page';
+import { Button } from '../components/ui/Button';
 
 const CATEGORIES = [
   { value: 'assistant', label: 'Assistente' },
@@ -181,12 +183,12 @@ export default function CreateCharacterPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 md:px-8">
-      <button onClick={() => navigate(-1)} className="btn-ghost mb-5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm">
+    <PageContainer width="prose">
+      <Button variant="ghost" size="sm" className="-ml-3 mb-6" onClick={() => navigate(-1)}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Indietro
-      </button>
+      </Button>
 
-      <h1 className="mb-1 font-display text-2xl font-bold text-ink">
+      <h1 className="mb-1 title-display text-display-md">
         {editId ? 'Modifica personaggio' : 'Crea un personaggio'}
       </h1>
       <p className="mb-8 text-sm text-ink-muted">
@@ -209,7 +211,7 @@ export default function CreateCharacterPage() {
               onClick={() => set('isPublic', false)}
               aria-pressed={!form.isPublic}
               className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors ${
-                !form.isPublic ? 'border-accent bg-accent-wash' : 'border-line bg-surface hover:border-line-strong'
+                !form.isPublic ? 'border-ink bg-surface' : 'border-line hover:border-line-control'
               }`}
             >
               <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
@@ -223,7 +225,7 @@ export default function CreateCharacterPage() {
               onClick={() => set('isPublic', true)}
               aria-pressed={form.isPublic}
               className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors ${
-                form.isPublic ? 'border-accent bg-accent-wash' : 'border-line bg-surface hover:border-line-strong'
+                form.isPublic ? 'border-ink bg-surface' : 'border-line hover:border-line-control'
               }`}
             >
               <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
@@ -324,6 +326,6 @@ export default function CreateCharacterPage() {
           </button>
         </div>
       </form>
-    </div>
+    </PageContainer>
   );
 }

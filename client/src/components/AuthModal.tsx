@@ -3,10 +3,16 @@ import { Eye, EyeOff, Check, Loader2, ArrowLeft, MailCheck, ChevronDown, AlertCi
 import api from '../services/api';
 import { useStore } from '../store/useStore';
 import Modal from './ui/Modal';
+import CodeInput from './ui/CodeInput';
 import { errorMessage } from '../lib/apiError';
 
-type View = 'login' | 'register' | 'forgot' | 'sent';
+type View = 'login' | 'register' | 'verify' | 'forgot' | 'sent';
 type Mode = 'login' | 'register';
+
+/**
+ * `authModalMode` puo' valere anche `'verify'`: e' come la striscia in cima
+ * all'applicazione riapre la conferma senza far ripassare dall'accesso.
+ */
 
 const MONTHS = [
   'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
@@ -78,7 +84,7 @@ function Field({ id, label, hint, error, action, children }: FieldProps) {
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-[0.8125rem] font-semibold leading-none tracking-[-0.006em] text-ink">
+        <label htmlFor={id} className="text-sm font-semibold leading-none text-ink">
           {label}
         </label>
         {action}
@@ -130,6 +136,15 @@ function Select({ label, value, onChange, invalid, children }: SelectProps) {
 
 /* ──────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * Chi nasce dopo questo istante non ha ancora diciotto anni. Catturato una
+ * volta sola, fuori dal render: una costante, non una lettura dell'orologio.
+ */
+const MAGGIORE_ETA = (() => {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear() - 18, d.getUTCMonth(), d.getUTCDate());
+})();
+
 export default function AuthModal() {
   const { isAuthModalOpen, authModalMode, setAuthModalOpen, setUser, setToken, notify, inviteRequired } = useStore();
 
@@ -144,6 +159,10 @@ export default function AuthModal() {
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  /** Conferma dell'indirizzo: il codice digitato e il freno al rinvio. */
+  const [code, setCode] = useState('');
+  const [resendIn, setResendIn] = useState(0);
 
   /**
    * Quali campi l'utente ha già lasciato.
@@ -178,10 +197,26 @@ export default function AuthModal() {
     setMonth('');
     setYear('');
     setInviteCode('');
+    setCode('');
+    setResendIn(0);
     setTouched({});
     setError('');
     setLoading(false);
   }, [isAuthModalOpen, authModalMode]);
+
+  /**
+   * Conto alla rovescia del rinvio.
+   *
+   * Il freno vero vive sul server e guarda il dato salvato — questo è solo il
+   * modo di dirlo prima di far premere un pulsante che risponderebbe «troppo
+   * presto». Un pulsante attivo che rifiuta è peggio di un pulsante spento che
+   * spiega quando tornerà disponibile.
+   */
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   const close = useCallback(() => setAuthModalOpen(false), [setAuthModalOpen]);
 
@@ -213,8 +248,16 @@ export default function AuthModal() {
     return new Date(Date.UTC(Number(year), Number(month), Number(day)));
   }, [day, month, year]);
 
-  const age = birthdate ? (Date.now() - birthdate.getTime()) / (365.25 * 24 * 3600 * 1000) : null;
-  const underage = age !== null && age < 18;
+  /**
+   * Maggiore età, calcolata su un istante catturato all'import del modulo.
+   *
+   * Era `Date.now()` letto durante il render, e `react-hooks/purity` lo
+   * segnalava — a ragione: un render che legge l'orologio non è riproducibile,
+   * e con il compilatore di React può essere memoizzato con un valore vecchio.
+   * L'ora esatta qui non serve a nulla: la soglia è una data di diciotto anni
+   * fa, e non si sposta mentre qualcuno compila un modulo.
+   */
+  const underage = birthdate !== null && birthdate.getTime() > MAGGIORE_ETA;
 
   const emailError = touched.email && email !== '' && !emailValid ? 'Indirizzo email non valido.' : '';
   const usernameError =
@@ -342,7 +385,71 @@ export default function AuthModal() {
         : 'Account creato.',
       'success'
     );
+
+    /**
+     * Non si chiude: si passa alla conferma.
+     *
+     * L'account esiste e la sessione e' aperta — si puo' gia' guardare il
+     * catalogo — ma senza indirizzo confermato non si scrive, e scoprirlo piu'
+     * tardi sbattendo contro un 403 al primo messaggio sarebbe il modo peggiore
+     * di dirlo. Il codice e' appena partito: il momento in cui l'utente e' piu'
+     * disposto a inserirlo e' adesso, non fra dieci minuti.
+     *
+     * Chiudere resta possibile: `Modal` ha la sua X e il suo Esc, e la striscia
+     * in cima all'applicazione riporta qui.
+     */
+    if (res.data.user && res.data.user.emailVerified === false) {
+      setView('verify');
+      return;
+    }
     close();
+  };
+
+  /**
+   * Conferma il codice.
+   *
+   * L'errore NON svuota il campo: chi ha sbagliato una cifra deve poter
+   * correggere quella, non riscrivere tutto. Svuotare dopo un errore è il modo
+   * più rapido di trasformare un refuso in un abbandono.
+   */
+  const confirmCode = async (valore?: string) => {
+    const daInviare = (valore ?? code).trim();
+    if (loading || daInviare.length !== 6) return;
+
+    setError('');
+    setLoading(true);
+
+    let res;
+    try {
+      res = await api.post('/auth/verify-email', { code: daInviare });
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'Codice non valido.'));
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+    setUser(res.data.user);
+    notify('Indirizzo confermato. Ora puoi scrivere.', 'success');
+    close();
+  };
+
+  const resendCode = async () => {
+    if (loading || resendIn > 0) return;
+
+    setError('');
+    setLoading(true);
+    try {
+      await api.post('/auth/resend-verification');
+      notify('Ti abbiamo inviato un nuovo codice.', 'success');
+      // Sessanta secondi: lo stesso freno che applica il server, mostrato
+      // invece che scoperto sbattendoci contro.
+      setResendIn(60);
+      setCode('');
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'Non siamo riusciti a inviare il codice.'));
+    }
+    setLoading(false);
   };
 
   const requestReset = async (e: React.FormEvent) => {
@@ -407,13 +514,15 @@ export default function AuthModal() {
   const titles: Record<View, string> = {
     login: 'Accedi',
     register: 'Crea un account',
+    verify: 'Conferma il tuo indirizzo',
     forgot: 'Recupera la password',
     sent: 'Controlla la posta'
   };
 
   const descriptions: Partial<Record<View, string>> = {
     login: 'Riprendi le tue conversazioni da dove le avevi lasciate.',
-    register: 'Bastano pochi secondi per cominciare.'
+    register: 'Bastano pochi secondi per cominciare.',
+    verify: 'Ti abbiamo inviato un codice di sei cifre.'
   };
 
   const isMode = view === 'login' || view === 'register';
@@ -423,10 +532,66 @@ export default function AuthModal() {
       {error && (
         <div
           role="alert"
-          className="animate-shake mb-5 flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger/[0.09] px-4 py-3 text-[0.8125rem] font-medium leading-relaxed text-danger"
+          className="animate-shake mb-5 flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger/[0.09] px-4 py-3 text-sm font-medium leading-relaxed text-danger"
         >
           <AlertCircle className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
           {error}
+        </div>
+      )}
+
+      {view === 'verify' && (
+        <div className="py-1">
+          <p className="mb-6 text-center text-sm leading-relaxed text-ink-muted">
+            Abbiamo scritto a <strong className="font-semibold text-ink">{email}</strong>.
+            Inserisci il codice che trovi nel messaggio.
+          </p>
+
+          <CodeInput
+            value={code}
+            onChange={setCode}
+            onComplete={confirmCode}
+            disabled={loading}
+            invalid={!!error}
+          />
+
+          <p className="mt-4 text-center text-xs text-ink-dim">Il codice vale 15 minuti.</p>
+
+          <button
+            type="button"
+            onClick={() => confirmCode()}
+            disabled={loading || code.length !== 6}
+            className="btn-primary mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold disabled:opacity-40"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            Conferma
+          </button>
+
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={resendCode}
+              disabled={loading || resendIn > 0}
+              className="btn-ghost rounded-lg px-2 py-1.5 text-xs font-medium disabled:opacity-40"
+            >
+              {resendIn > 0 ? `Puoi chiederne un altro fra ${resendIn}s` : 'Non è arrivato? Invia di nuovo'}
+            </button>
+          </div>
+
+          {/*
+            * Si può rimandare, e va detto.
+            *
+            * L'account esiste già e il catalogo è visitabile: nascondere questa
+            * via d'uscita farebbe sembrare la conferma un muro invece di un
+            * passaggio, e chi non trova subito l'email chiuderebbe la scheda
+            * invece di guardarsi intorno.
+            */}
+          <button
+            type="button"
+            onClick={close}
+            className="btn-ghost mt-1 w-full rounded-lg py-2 text-xs text-ink-dim"
+          >
+            Lo faccio più tardi
+          </button>
         </div>
       )}
 
@@ -503,8 +668,7 @@ export default function AuthModal() {
           >
             <span
               aria-hidden="true"
-              className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-xl bg-accent
-                          shadow-[0_2px_12px_-2px_rgba(37,99,235,0.55)]
+              className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded bg-accent
                           transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
                           ${view === 'register' ? 'translate-x-full' : 'translate-x-0'}`}
             />
@@ -671,7 +835,7 @@ export default function AuthModal() {
                   </div>
 
                   <fieldset>
-                    <legend className="mb-2 text-[0.8125rem] font-semibold leading-none tracking-[-0.006em] text-ink">
+                    <legend className="mb-2 text-sm font-semibold leading-none text-ink">
                       Data di nascita
                     </legend>
                     <p className="mb-3 text-xs font-normal leading-relaxed text-ink-dim">

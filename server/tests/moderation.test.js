@@ -59,6 +59,7 @@ describe('FASE D — Moderazione dei contenuti', () => {
     ]);
 
     user = await User.create({
+    emailVerifiedAt: new Date(),
       email: 'moderato@example.com',
       username: 'moderato',
       authProvider: 'local',

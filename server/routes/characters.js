@@ -2,15 +2,15 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, attachUser } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { createCharacterSchema } = require('../utils/validation');
+const { createCharacterSchema, isValidObjectId } = require('../utils/validation');
 const Character = require('../models/Character');
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
-const { createCharacterLimiter } = require('../middleware/rateLimit');
+const { createCharacterLimiter, searchGuard } = require('../middleware/rateLimit');
 const { moderateCharacterProfile } = require('../services/moderationService');
+const { requireVerifiedEmail } = require('../middleware/requireVerifiedEmail');
 const { recordViolation } = require('../services/moderationLog');
 
-const mongoose = require('mongoose');
 const { serverFailure } = require('../services/failure');
 
 /**
@@ -20,7 +20,6 @@ const { serverFailure } = require('../services/failure');
  */
 const PUBLIC_FIELDS = '-systemPrompt';
 
-const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id) && /^[0-9a-fA-F]{24}$/.test(id);
 
 /**
  * Neutralizza i metacaratteri delle espressioni regolari nel testo cercato:
@@ -29,22 +28,14 @@ const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id) && /^[0-9a-f
  */
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** `createdBy` può essere un ObjectId o un documento popolato: normalizza l'id. */
-const creatorId = (character) => {
-  const c = character.createdBy;
-  if (!c) return null;
-  return (c._id || c).toString();
-};
-
-const isOwner = (character, user) => !!user && creatorId(character) === user._id.toString();
-
 /**
- * Un personaggio è visibile a un terzo solo se è pubblico E ha superato la
- * revisione. Il creatore vede sempre il proprio, in qualunque stato: altrimenti
- * un personaggio in attesa sparirebbe anche a chi l'ha appena creato.
+ * La regola di visibilità sta in `utils/visibility.js`, non qui.
+ *
+ * Era scritta a mano in questo file, nel filtro della galleria e dentro
+ * `routes/chats.js`. Cambiandola in due punti su tre, il personaggio compariva
+ * in galleria ma «Nuova conversazione» rispondeva 404.
  */
-const canView = (character, user) =>
-  isOwner(character, user) || (character.isPublic && character.moderationStatus === 'approved');
+const { isOwner, isCharacterVisible: canView, VISIBLE_TO_OTHERS } = require('../utils/visibility');
 
 /**
  * Contenuti per adulti (FASE D — S2-3).
@@ -59,13 +50,44 @@ const canView = (character, user) =>
 const canSeeNSFW = (user) => !!user && typeof user.canSeeNSFW === 'function' && user.canSeeNSFW();
 
 // GET /api/characters - List public characters with category filter, search, and pagination
-router.get('/', attachUser, async (req, res) => {
+router.get('/', attachUser, searchGuard, async (req, res) => {
   try {
-    const { category, search, page = 1, limit = 20, tag } = req.query;
-    const validLimit = Math.min(parseInt(limit) || 20, 50);
-    const skip = (parseInt(page) - 1) * validLimit;
+    /**
+     * Ogni parametro passa da `String()` PRIMA di toccare il filtro (S5).
+     *
+     * `express.urlencoded({ extended: true })` fa sì che `req.query` possa
+     * contenere OGGETTI, non solo stringhe: `?tag[$ne]=x` arriva qui come
+     * `{ $ne: 'x' }`. Due conseguenze, entrambe su una rotta pubblica e non
+     * autenticata:
+     *
+     *  1. `tag.toLowerCase is not a function` → TypeError → 500 con lo stack in
+     *     Sentry, generabile a volontà entro le 240 richieste al minuto del
+     *     limite generale. Idem `search.trim()`.
+     *  2. l'oggetto sarebbe finito in `filter` come operatore Mongo. Qui il
+     *     danno era contenuto — `isPublic`, `moderationStatus` e `isNSFW` sono
+     *     impostati a parte e non sovrascrivibili — ma la difesa non deve
+     *     dipendere dall'ordine delle righe.
+     *
+     * `String({})` dà `'[object Object]'`, che semplicemente non trova nulla:
+     * la direzione di fallimento giusta.
+     */
+    const testo = (v) => (v === undefined || v === null ? '' : String(v));
+    const category = testo(req.query.category);
+    const search = testo(req.query.search);
+    const tag = testo(req.query.tag);
 
-    const filter = { isPublic: true, moderationStatus: 'approved' };
+    const validLimit = Math.min(parseInt(testo(req.query.limit), 10) || 20, 50);
+    /**
+     * `Math.max(..., 1)` (S6). Senza, `?page=-5` dava `skip(-120)` e MongoDB
+     * rispondeva «Skip value must be non-negative» → un altro 500 pubblico.
+     * `admin.js` clampava già correttamente nelle sue due rotte equivalenti:
+     * qui era rimasto fuori.
+     */
+    const pagina = Math.max(parseInt(testo(req.query.page), 10) || 1, 1);
+    const skip = (pagina - 1) * validLimit;
+
+    // La stessa regola di `canView`, in forma di filtro: pubblico e non rimosso.
+    const filter = { ...VISIBLE_TO_OTHERS };
 
     // I contenuti per adulti restano fuori dalla galleria per chiunque non sia
     // un utente maggiorenne che li ha esplicitamente richiesti.
@@ -81,7 +103,16 @@ router.get('/', attachUser, async (req, res) => {
       filter.tags = tag.toLowerCase();
     }
 
-    if (search && search.trim().length > 0) {
+    /**
+     * Almeno due caratteri.
+     *
+     * Con uno solo la `$regex` combacia con quasi tutto: la scansione completa
+     * c'e' comunque, e restituisce l'intero catalogo — cioe' il costo massimo
+     * per il risultato meno utile che esista. Sotto la soglia si ignora il
+     * termine invece di rifiutare: chi ha appena digitato la prima lettera sta
+     * ancora scrivendo, non ha sbagliato.
+     */
+    if (search && search.trim().length >= 2) {
       // Ricerca per sottostringa, non `$text`. Due ragioni:
       //  1. `$text` richiede un indice testuale già costruito: sulla prima
       //     ricerca di un database nuovo falliva con 500.
@@ -112,7 +143,7 @@ router.get('/', attachUser, async (req, res) => {
     res.json({
       characters,
       pagination: {
-        page: parseInt(page) || 1,
+        page: pagina,
         limit: validLimit,
         total,
         totalPages: Math.ceil(total / validLimit)
@@ -199,17 +230,23 @@ async function screenProfile(body, user, res) {
 }
 
 /**
- * Stato di revisione all'atto del salvataggio (FASE D — S2-2).
+ * Stato di visibilità all'atto del salvataggio.
  *
- * Un personaggio PRIVATO è visibile solo al suo autore: non c'è nulla da
- * rivedere e resta immediatamente utilizzabile. Un personaggio PUBBLICO entra
- * in coda: prima bastava un click su una casella preselezionata per comparire
- * in galleria senza che nessuno avesse guardato nulla.
+ * Restituisce `'approved'` per tutti: un personaggio nasce visibile, e il campo
+ * ora significa «non rimosso» invece di «già esaminato». Chi l'ha esaminato lo
+ * dice `moderatedAt`, ed è quello a decidere cosa compare nella coda.
+ *
+ * Un'eccezione che NON è un dettaglio: un personaggio già respinto e poi
+ * modificato dall'autore resta respinto. Rimetterlo a `'approved'` alla prima
+ * modifica trasformerebbe la rimozione in un fastidio da aggirare cambiando una
+ * virgola. Torna in coda per essere riesaminato, ma nel frattempo resta fuori
+ * dalla galleria.
  */
-const statusFor = (isPublic) => (isPublic ? 'pending' : 'approved');
+const visibilityFor = (character) =>
+  character.moderationStatus === 'rejected' ? 'rejected' : 'approved';
 
 // POST /api/characters - Create a new custom character
-router.post('/', requireAuth, createCharacterLimiter, validate(createCharacterSchema), async (req, res) => {
+router.post('/', requireAuth, requireVerifiedEmail, createCharacterLimiter, validate(createCharacterSchema), async (req, res) => {
   try {
     if (!(await screenProfile(req.body, req.user, res))) return;
 
@@ -224,7 +261,10 @@ router.post('/', requireAuth, createCharacterLimiter, validate(createCharacterSc
     const characterData = {
       ...req.body,
       createdBy: req.user._id,
-      moderationStatus: statusFor(req.body.isPublic),
+      // Visibile subito. La revisione umana avviene dopo, sulla coda di ciò
+      // che è pubblicato e non ancora guardato (`moderatedAt: null`).
+      moderationStatus: 'approved',
+      moderatedAt: null,
       systemPrompt: `You are ${req.body.name}. ${req.body.personality}. ${req.body.backstory ? `Backstory: ${req.body.backstory}` : ''}`
     };
 
@@ -239,6 +279,10 @@ router.post('/', requireAuth, createCharacterLimiter, validate(createCharacterSc
 // PUT /api/characters/:id - Update an existing character
 router.put('/:id', requireAuth, validate(createCharacterSchema), async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identificativo non valido' });
+    }
+
     const character = await Character.findById(req.params.id);
     if (!character) {
       return res.status(404).json({ error: 'Character non trovato' });
@@ -259,13 +303,19 @@ router.put('/:id', requireAuth, validate(createCharacterSchema), async (req, res
     Object.assign(character, req.body);
     character.systemPrompt = `You are ${req.body.name}. ${req.body.personality}. ${req.body.backstory ? `Backstory: ${req.body.backstory}` : ''}`;
 
-    // Ogni modifica di un personaggio pubblico torna in coda: approvare una
-    // versione e lasciar riscrivere liberamente il testo dopo l'approvazione
-    // renderebbe la revisione una formalità aggirabile in un secondo momento.
-    character.moderationStatus = statusFor(character.isPublic);
+    /**
+     * Ogni modifica rimette il personaggio in coda.
+     *
+     * Approvare una versione e lasciar riscrivere liberamente il testo dopo
+     * renderebbe la revisione una formalità aggirabile in un secondo momento.
+     * `moderatedAt: null` è ciò che lo riporta davanti a un moderatore; la
+     * visibilità nel frattempo la decide `visibilityFor`, che NON risuscita un
+     * personaggio rimosso.
+     */
+    character.moderationStatus = visibilityFor(character);
     character.moderatedBy = null;
     character.moderatedAt = null;
-    character.moderationReason = '';
+    if (character.moderationStatus !== 'rejected') character.moderationReason = '';
 
     await character.save();
     const { systemPrompt, ...safe } = character.toObject();
@@ -278,6 +328,10 @@ router.put('/:id', requireAuth, validate(createCharacterSchema), async (req, res
 // DELETE /api/characters/:id - Delete a character
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Identificativo non valido' });
+    }
+
     const character = await Character.findById(req.params.id);
     if (!character) {
       return res.status(404).json({ error: 'Character non trovato' });

@@ -7,6 +7,7 @@ import CharacterCard from '../components/CharacterCard';
 import CharacterRow from '../components/CharacterRow';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { PageContainer } from '../components/ui/Page';
 
 // Le categorie sono quelle realmente accettate dal server, non etichette
 // decorative: prima Feed / Charms / Labs non filtravano nulla (S3-2, S3-3).
@@ -48,7 +49,7 @@ export default function DiscoverPage() {
     : CATEGORIES.find((c) => c.id === category)?.label ?? 'Personaggi';
 
   return (
-    <div className="mx-auto w-full max-w-[76rem] px-6 py-14 md:px-10 lg:px-14">
+    <PageContainer width="wide">
       {/**
         * Intestazione: due righe, non quattro.
         *
@@ -59,7 +60,7 @@ export default function DiscoverPage() {
         * cosa fare, e il saluto, che resta piccolo perché è una cortesia.
         */}
       <header className="mb-12">
-        <h1 className="title-serif text-display-lg">Scegli con chi parlare</h1>
+        <h1 className="title-display text-display-lg">Scegli con chi parlare</h1>
         {user && (
           <p className="mt-3 text-sm text-ink-dim">Bentornato, @{user.username}</p>
         )}
@@ -125,7 +126,7 @@ export default function DiscoverPage() {
         <>
           <section className="mb-14">
             <div className="rule mb-7 flex items-baseline justify-between gap-4 pt-5">
-              <h2 className="title-serif text-display-sm">{heading}</h2>
+              <h2 className="title-display text-display-sm">{heading}</h2>
               <span className="tabular text-micro text-ink-dim">
                 {featured.characters.length}
               </span>
@@ -153,11 +154,11 @@ export default function DiscoverPage() {
                 <div className="mb-3.5 flex aspect-[4/5] items-center justify-center rounded-lg
                                 border border-dashed border-line transition-colors
                                 group-hover:border-line-strong">
-                  <span className="text-2xl font-light text-ink-dim transition-colors group-hover:text-ink-muted">
+                  <span className="text-display-sm font-light text-ink-dim transition-colors group-hover:text-ink-muted">
                     +
                   </span>
                 </div>
-                <h3 className="title-serif text-display-sm text-ink-muted transition-colors group-hover:text-ink">
+                <h3 className="title-display text-display-sm text-ink-muted transition-colors group-hover:text-ink">
                   Crea il tuo
                 </h3>
               </Link>
@@ -172,6 +173,6 @@ export default function DiscoverPage() {
           )}
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -32,22 +32,27 @@ describe('CharacterCard', () => {
     expect(screen.getByText(/1\.4k conversazioni/)).toBeInTheDocument();
   });
 
-  it('segnala che un personaggio pubblico è in attesa di revisione', () => {
+  /**
+   * L'etichetta «In revisione» non esiste più: con la moderazione successiva un
+   * personaggio pubblico è visibile appena creato, e dire all'autore che è «in
+   * revisione» mentre chiunque può già aprirlo sarebbe semplicemente falso.
+   */
+  it('un personaggio pubblico appena creato non porta etichette', () => {
     resetStore();
-    renderWithRouter(<CharacterCard character={testCharacter({ isPublic: true, moderationStatus: 'pending' })} />);
-    expect(screen.getByText(/In revisione/i)).toBeInTheDocument();
+    renderWithRouter(<CharacterCard character={testCharacter({ isPublic: true, moderationStatus: 'approved' })} />);
+    expect(screen.queryByText(/In revisione|Rimosso/i)).not.toBeInTheDocument();
   });
 
-  it('segnala un personaggio respinto', () => {
+  it('segnala un personaggio rimosso dalla galleria', () => {
     resetStore();
     renderWithRouter(<CharacterCard character={testCharacter({ isPublic: true, moderationStatus: 'rejected' })} />);
-    expect(screen.getByText(/Respinto/i)).toBeInTheDocument();
+    expect(screen.getByText(/Rimosso/i)).toBeInTheDocument();
   });
 
-  it('un personaggio approvato non porta etichette di stato', () => {
+  it('un personaggio privato non porta etichette di stato', () => {
     resetStore();
     renderWithRouter(<CharacterCard character={testCharacter({ moderationStatus: 'approved' })} />);
-    expect(screen.queryByText(/In revisione|Respinto/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/In revisione|Rimosso/i)).not.toBeInTheDocument();
   });
 
   it('marca i contenuti per adulti', () => {

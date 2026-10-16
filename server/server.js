@@ -1,12 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const mongoose = require('mongoose');
 require('dotenv').config();
 const connectDB = require('./config/db');
-const { assertProductionEnv } = require('./config/env');
+const { assertProductionEnv, devOutboxEnabled } = require('./config/env');
 const logger = require('./services/logger');
 const { requestContext } = require('./middleware/requestContext');
 const { initErrorReporting, reportError } = require('./services/errorReporting');
+const { scheduleRetention } = require('./services/retention');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -16,6 +18,27 @@ const PORT = process.env.PORT || 5001;
 // tentativi falliti di un singolo attaccante bloccherebbero il login a chiunque.
 // Con `1` si considera attendibile un solo hop, quello del proxy.
 app.set('trust proxy', 1);
+
+/**
+ * Querystring PIATTA: `?tag[$ne]=x` arriva come la stringa `'[object Object]'`,
+ * non come un operatore Mongo.
+ *
+ * Con il parser predefinito (`extended`, cioè `qs`) un parametro può arrivare
+ * come OGGETTO, e ogni rotta che lo infila in un filtro deve ricordarsi di
+ * neutralizzarlo. `characters.js` lo fa, con un commento che spiega perché — ma
+ * è disciplina riga per riga, e la disciplina la si dimentica alla prossima
+ * rotta scritta di fretta. Qui la possibilità sparisce per tutte le rotte
+ * insieme: `req.query` contiene solo stringhe e array di stringhe.
+ *
+ * Le difese `String(...)` già presenti restano dove sono: due strati che si
+ * sovrappongono vanno bene, uno solo che si può dimenticare no.
+ *
+ * (Nota per chi legge `routes/characters.js:55`: quel commento attribuisce il
+ * comportamento a `express.urlencoded`, ma in Express il parser della
+ * querystring è indipendente dal parser dei corpi. La difesa era giusta, la
+ * spiegazione no.)
+ */
+app.set('query parser', 'simple');
 
 /**
  * Intestazioni di sicurezza (FASE D — S2-15).
@@ -55,7 +78,22 @@ app.use(helmet({
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+  credentials: true,
+  /**
+   * Le intestazioni di paginazione vanno DICHIARATE esposte.
+   *
+   * `GET /chats` restituisce un array e manda la continuazione in
+   * `X-Has-More` / `X-Next-Cursor`. Oggi funziona perché l'API è same-origin —
+   * proxy di Vite in sviluppo, riscrittura di Vercel in produzione — e il
+   * browser lascia leggere tutto. Ma è una dipendenza tacita: il giorno in cui
+   * qualcuno pubblicasse l'API su un sottodominio, quelle due intestazioni
+   * sparirebbero dal client senza alcun errore, e la cronologia si fermerebbe
+   * alle prime trenta conversazioni senza che nulla lo spieghi.
+   *
+   * Dichiararle costa una riga e toglie di mezzo un guasto che si manifesta
+   * solo dopo un cambio di infrastruttura, cioè quando nessuno lo sta cercando.
+   */
+  exposedHeaders: ['X-Has-More', 'X-Next-Cursor']
 }));
 
 // Stripe webhook requires the raw, unparsed body for HMAC signature verification.
@@ -69,17 +107,37 @@ app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
 // migliaia: 256 KB sono abbondanti, e riducono di quaranta volte quanto un
 // singolo client puo' far allocare al processo.
 app.use(express.json({ limit: '256kb' }));
-app.use(express.urlencoded({ extended: true }));
 
-// Clerk Middleware (Safely handle mock/test environments)
-if (process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_PUBLISHABLE_KEY.startsWith('pk_test_c')) {
-  try {
-    const { clerkMiddleware } = require('@clerk/express');
-    app.use(clerkMiddleware());
-  } catch (e) {
-    console.warn('Clerk middleware fallback mode active');
-  }
-}
+/**
+ * `express.urlencoded` NON viene montato, e la sua assenza e' una difesa.
+ *
+ * Nessuna rotta di questa API legge un corpo in forma di modulo: il client
+ * parla JSON, il webhook di Stripe vuole il corpo grezzo. Montare comunque il
+ * parser dei moduli lasciava aperta l'unica forma di richiesta che un sito
+ * terzo puo' costruire senza il permesso del browser — un `<form>` con
+ * `Content-Type: application/x-www-form-urlencoded` parte cross-origin, senza
+ * preflight, portandosi dietro il cookie di sessione.
+ *
+ * E' il vettore CSRF classico, ed e' anche la ragione per cui questo progetto
+ * puo' permettersi di non avere token CSRF: `SameSite=Lax` piu' API
+ * same-origin coprono i casi pratici FINCHE' l'unico modo di parlare con la API
+ * e' un corpo JSON, che una richiesta cross-site semplice non puo' produrre.
+ * Riaggiungere questa riga significa rimettere in discussione quella scelta.
+ */
+
+/**
+ * Il middleware Clerk NON viene più montato (S2).
+ *
+ * La condizione era `CLERK_PUBLISHABLE_KEY.startsWith('pk_test_c')`: una chiave
+ * di TEST accendeva un percorso di autenticazione anche in produzione, che è la
+ * direzione di fallimento sbagliata — la stessa scelta altrove nel progetto va
+ * nel verso opposto (`isProduction()` in config/env.js tratta come produzione
+ * qualunque ambiente non dichiarato).
+ *
+ * Il ramo che ne dipendeva, in `middleware/auth.js`, creava account con i
+ * crediti di benvenuto scavalcando il codice d'invito della beta chiusa. Clerk
+ * era già stato abbandonato dappertutto: restava solo quel pezzo.
+ */
 
 /**
  * Logging strutturato con identificativo di richiesta (FASE E).
@@ -111,6 +169,19 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/feedback', require('./routes/feedback'));
 app.use('/api/admin', require('./routes/admin'));
+
+/**
+ * Rotte di sviluppo — montate solo se DAVVERO abilitate.
+ *
+ * Il router non viene nemmeno costruito quando la condizione è falsa, quindi
+ * in produzione `/api/dev/outbox` risponde 404 come qualunque indirizzo
+ * inventato: non 403, che rivelerebbe che esiste. La condizione richiede
+ * `NODE_ENV` fuori produzione E `DEV_OUTBOX=1`, e `assertProductionEnv()` fa
+ * fallire l'avvio se quella variabile compare in produzione.
+ */
+if (devOutboxEnabled()) {
+  app.use('/api/dev', require('./routes/dev'));
+}
 
 // File generati (immagini): serviti staticamente quando l'archiviazione è
 // quella locale di sviluppo. In produzione con Cloudinary questa rotta resta
@@ -149,13 +220,29 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Health check endpoint
+/**
+ * Sonda di salute — e «salute» qui vuol dire «può servire una richiesta».
+ *
+ * Prima rispondeva `200 ok` incondizionatamente: un processo vivo con il
+ * database irraggiungibile si dichiarava sano, quindi Render lo teneva in
+ * rotazione e ogni richiesta rispondeva 500. Una sonda che non può fallire non
+ * è una sonda, è una decorazione — ed è esattamente lo scenario in cui serve.
+ *
+ * Si guarda `readyState`, non si esegue una query: la sonda viene chiamata di
+ * continuo e non deve diventare essa stessa un carico. Gli stati sono
+ * 0 disconnesso · 1 connesso · 2 in connessione · 3 in disconnessione.
+ *
+ * `env` non c'è più: diceva a chiunque quale ambiente sta girando, su una rotta
+ * pubblica e non limitata, senza servire a nessuno che non abbia già accesso ai
+ * log.
+ */
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
+  const connesso = mongoose.connection.readyState === 1;
+  res.status(connesso ? 200 : 503).json({
+    status: connesso ? 'ok' : 'degraded',
     service: 'your-character-backend',
-    timestamp: new Date().toISOString(),
-    env: process.env.NODE_ENV || 'development'
+    database: connesso ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -234,13 +321,69 @@ async function bootstrap() {
 
   return connectDB()
     .then(() => {
-      app.listen(PORT, () => {
+      const server = app.listen(PORT, () => {
         logger.info(
           { port: PORT, env: process.env.NODE_ENV || 'development' },
           `your-character backend in ascolto sulla porta ${PORT}`
         );
       });
+      installShutdown(server);
+      // La pulizia parte DOPO la connessione: prima non avrebbe un database a
+      // cui parlare, e il primo giro avviene all'avvio invece di aspettare sei
+      // ore — su un servizio che si riavvia spesso, un timer lungo e basta non
+      // scatterebbe mai.
+      scheduleRetention();
+      return server;
     });
+}
+
+/**
+ * Spegnimento pulito.
+ *
+ * Render manda `SIGTERM` a ogni deploy e a ogni riavvio, e senza un gestore il
+ * processo muore all'istante: le richieste in volo vengono troncate a metà
+ * risposta. Sul percorso dei messaggi questo è peggio di una risposta mancata —
+ * il credito è già stato riservato e la chiamata al modello è già stata pagata,
+ * quindi l'utente perde il credito E la risposta.
+ *
+ * L'ordine conta: prima si smette di accettare connessioni nuove, poi si
+ * lasciano finire quelle aperte, poi si chiude il database. Chiudere Mongo per
+ * primo farebbe fallire proprio le richieste che stiamo cercando di salvare.
+ *
+ * Il timer è la rete di sicurezza: se dopo `SHUTDOWN_TIMEOUT_MS` qualcosa è
+ * ancora appeso (una risposta in streaming che non termina, tipicamente) si
+ * esce comunque. `unref()` perché questo timer non deve, da solo, tenere vivo
+ * il processo che sta cercando di morire.
+ */
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 15000;
+
+function installShutdown(server) {
+  let inCorso = false;
+
+  const spegni = async (segnale) => {
+    if (inCorso) return;
+    inCorso = true;
+    logger.info({ segnale }, 'Spegnimento in corso: non accetto più connessioni');
+
+    const scadenza = setTimeout(() => {
+      logger.warn({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, 'Spegnimento forzato: richieste ancora in volo');
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    scadenza.unref();
+
+    try {
+      await new Promise((resolve) => server.close(resolve));
+      await mongoose.connection.close(false);
+      logger.info('Spegnimento completato');
+      process.exit(0);
+    } catch (err) {
+      logger.error({ err: { message: err.message } }, 'Errore durante lo spegnimento');
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => spegni('SIGTERM'));
+  process.on('SIGINT', () => spegni('SIGINT'));
 }
 
 if (process.env.NODE_ENV !== 'test') {

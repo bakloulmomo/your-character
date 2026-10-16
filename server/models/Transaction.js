@@ -65,6 +65,8 @@ const transactionSchema = new mongoose.Schema({
     default: null,
     index: true
   },
+  // L'indice sta in fondo al file: è UNIVOCO ma PARZIALE, e la ragione merita
+  // più spazio di quanto ne stia in una riga di schema.
   stripePaymentIntentId: {
     type: String,
     default: null
@@ -129,5 +131,31 @@ transactionSchema.set('toObject', { virtuals: true });
 
 transactionSchema.index({ userId: 1, createdAt: -1 });
 transactionSchema.index({ status: 1 });
+
+/**
+ * Indice UNIVOCO e PARZIALE su `stripePaymentIntentId` (S10).
+ *
+ * Il campo era senza indice, ed è il filtro della rivendicazione atomica nel
+ * webhook — il percorso critico del denaro. Ogni evento faceva una scansione
+ * completa della collezione; Stripe ritenta per tre giorni con backoff, quindi
+ * una raffica di retry durante un incidente moltiplicava le scansioni proprio
+ * mentre il database era già in difficoltà, e i crediti dei clienti paganti non
+ * arrivavano.
+ *
+ * `unique` sposta l'idempotenza dal codice al DATABASE, che è l'unico posto in
+ * cui due processi concorrenti non possono aggirarla.
+ *
+ * PARZIALE e non `sparse`, e la differenza qui è sostanziale: `sparse` esclude
+ * i documenti in cui il campo è ASSENTE, non quelli in cui vale `null`. Il
+ * campo ha `default: null`, quindi ogni transazione simulata lo scrive
+ * esplicitamente — con `sparse: true` la seconda transazione senza
+ * PaymentIntent violava l'unicità contro la prima, ed è precisamente quello che
+ * ha fatto fallire `fiscalRetention.test.js`. Il filtro sul tipo `string`
+ * lascia fuori tutti i `null`, che è ciò che si intendeva.
+ */
+transactionSchema.index(
+  { stripePaymentIntentId: 1 },
+  { unique: true, partialFilterExpression: { stripePaymentIntentId: { $type: 'string' } } }
+);
 
 module.exports = mongoose.model('Transaction', transactionSchema);

@@ -16,9 +16,24 @@ async function connectDB() {
     logger.warn('MongoDB disconnesso');
   });
 
+  /**
+   * La dimensione del pool è un budget CONDIVISO, non una preferenza locale.
+   *
+   * Il tetto di connessioni è del cluster, non del processo: su Atlas M0 sono
+   * 500 in tutto, e ogni istanza dell'applicazione ne prenota fino a
+   * `maxPoolSize`. Con un valore fisso di 50 il conto tornava finché l'istanza
+   * era una sola — cioè finché non si scala, che è esattamente il momento in
+   * cui il limite si scopre, e lo si scopre come errori di connessione sotto
+   * carico invece che come una riga di configurazione.
+   *
+   * Ora è una variabile d'ambiente: chi aggiunge la seconda istanza dimezza
+   * questo numero invece di scoprire il tetto in produzione.
+   */
+  const maxPoolSize = Number(process.env.MONGO_MAX_POOL_SIZE) || 20;
+
   await mongoose.connect(uri, {
-    maxPoolSize: 50,
-    minPoolSize: 5,
+    maxPoolSize,
+    minPoolSize: 2,
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000
   });

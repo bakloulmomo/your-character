@@ -60,8 +60,24 @@ async function main() {
   // Risposte deterministiche e fatturabili: servono a verificare l'economia dei
   // crediti (esaurimento → acquisto → ripresa) senza chiamare un modello vero.
   process.env.AI_MODE = process.env.AI_MODE || 'stub';
-  // Il primo account con questo indirizzo diventa amministratore: è così che il
-  // test può aprire la coda di moderazione.
+  /**
+   * La casella di posta di sviluppo, accesa qui e solo qui.
+   *
+   * Senza trasporto email la conferma dell'indirizzo è impercorribile: il
+   * codice esiste solo come impronta SHA-256, quindi non si recupera nemmeno
+   * dal database. Da quando `requireVerifiedEmail` protegge messaggi, chat e
+   * personaggi, questo ha fermato cinque percorsi su nove — registrarsi
+   * funzionava, e da lì in poi niente.
+   *
+   * L'alternativa era una scorciatoia che salta la verifica nei test. Sarebbe
+   * stata più rapida e avrebbe verificato un prodotto che non esiste: con la
+   * casella i test attraversano lo stesso cancello di un utente vero, modulo
+   * del codice compreso.
+   */
+  process.env.DEV_OUTBOX = '1';
+  // Recapito di ripiego per le notifiche allo staff. NON concede alcun ruolo:
+  // l'account di moderazione viene seminato più sotto con il ruolo già scritto,
+  // che è esattamente il percorso reale (`scripts/grantRole.js`, fuori banda).
   process.env.ADMIN_EMAILS = process.env.ADMIN_EMAILS || 'staff@e2e.test';
   // Tetto giornaliero: protegge la quota gratuita condivisa di Gemini, che e'
   // per progetto e non per utente. Alto quanto basta a non intralciare i test.
@@ -118,6 +134,28 @@ async function main() {
     username: 'catalogo',
     authProvider: 'local',
     birthdate: new Date('1990-01-01')
+  });
+
+  /**
+   * L'account di moderazione, con il ruolo già assegnato.
+   *
+   * Prima nasceva da `ADMIN_EMAILS`: il test si registrava con l'indirizzo
+   * giusto e l'API lo promuoveva. Quella promozione automatica era una falla
+   * (chiunque conoscesse l'indirizzo poteva prenderselo) ed è stata rimossa da
+   * `routes/auth.js`. Il ruolo ora si concede fuori banda, con accesso al
+   * database — che è precisamente ciò che questa riga fa.
+   *
+   * La password è la stessa che usa `moderation.spec.ts`, così il percorso
+   * «esiste già → accedi» del test trova l'account e ci entra.
+   */
+  const bcrypt = require('bcryptjs');
+  await User.create({
+    email: 'staff@e2e.test',
+    username: 'staff',
+    authProvider: 'local',
+    passwordHash: await bcrypt.hash('Password1', 10),
+    birthdate: new Date('1990-01-01'),
+    role: 'admin'
   });
 
   await Character.insertMany(

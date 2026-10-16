@@ -30,7 +30,8 @@ describe('FASE B — Integrità dei dati', () => {
 
   beforeEach(async () => {
     await Promise.all([User.deleteMany({}), Character.deleteMany({}), Chat.deleteMany({}), Message.deleteMany({})]);
-    user = await User.create({ clerkId: CLERK, email: 'integ@example.com', username: 'integrity', credits: 200 });
+    user = await User.create({
+    emailVerifiedAt: new Date(), clerkId: CLERK, email: 'integ@example.com', username: 'integrity', credits: 200 });
     character = await Character.create({
       name: 'Personaggio Test',
       description: 'Personaggio usato per i test di integrità referenziale.',

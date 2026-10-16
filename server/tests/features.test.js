@@ -54,6 +54,7 @@ describe('Interruttori di funzionalità', () => {
     await Promise.all([User.deleteMany({}), Chat.deleteMany({}), Character.deleteMany({})]);
 
     utente = await User.create({
+    emailVerifiedAt: new Date(),
       email: 'beta@example.com', username: 'beta', authProvider: 'local',
       birthdate: new Date('1990-01-01'), credits: 500
     });

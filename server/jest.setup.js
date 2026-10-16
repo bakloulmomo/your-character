@@ -65,3 +65,17 @@ delete process.env.SENTRY_DSN;
 process.env.FEATURE_PAYMENTS = 'true';
 process.env.FEATURE_SUBSCRIPTIONS = 'true';
 process.env.FEATURE_IMAGE_GENERATION = 'true';
+
+/**
+ * Crediti di benvenuto — fissati, non dedotti.
+ *
+ * È esattamente la fuga che l'intestazione di questo file descrive, sfuggita a
+ * una variabile sola. `welcomeCredits()` ripiega su 10 quando i pagamenti sono
+ * accesi, ed è il valore che `auth.test.js` e `api.test.js` si aspettano. Ma
+ * `server/.env` contiene `WELCOME_CREDITS=100` per la beta gratuita, dotenv non
+ * sovrascrive ciò che è già definito e questa non lo era: sulla macchina di chi
+ * sviluppa i due test cadevano, in CI — dove `.env` non esiste — restavano
+ * verdi. Una suite che risponde diversamente a seconda di un file non
+ * versionato non sta più verificando niente.
+ */
+process.env.WELCOME_CREDITS = '10';

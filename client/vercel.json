@@ -3,14 +3,19 @@
 
   "rewrites": [
     {
-      "//": "IMPORTANTE — sostituisci l'host con l'URL del tuo backend su Render.",
+      "//": "OBBLIGATORIO — sostituisci l'host con l'URL reale del backend su Render.",
+      "//0": "Il segnaposto usa il TLD riservato .invalid, che non puo' risolvere:",
+      "//0b": "se qualcuno pubblica senza averlo cambiato, le chiamate falliscono",
+      "//0c": "subito e in modo visibile. Prima c'era un .onrender.com plausibile,",
+      "//0d": "cioe' un sottodominio che una terza persona puo' registrare — e un",
+      "//0e": "deploy dimenticato avrebbe inoltrato a lei le sessioni degli utenti.",
       "//2": "Questa riscrittura e' cio' che rende l'API same-origin per il browser:",
       "//3": "il client chiama /api/... sul proprio dominio e Vercel inoltra al backend.",
       "//4": "Ne dipendono due cose: il cookie di sessione httpOnly (che con",
       "//5": "SameSite=Lax non viaggerebbe verso un'altra origine) e la direttiva",
       "//6": "connect-src 'self' della CSP qui sotto.",
       "source": "/api/:path*",
-      "destination": "https://your-character-api.onrender.com/api/:path*"
+      "destination": "https://sostituisci-questo-host.invalid/api/:path*"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
@@ -21,7 +26,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.stripe.com https://*.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' https://api.stripe.com https://*.stripe.com https://*.ingest.sentry.io https://*.ingest.de.sentry.io; frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
         },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },

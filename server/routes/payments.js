@@ -1,5 +1,40 @@
 const express = require('express');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+/**
+ * Il client Stripe si costruisce alla PRIMA chiamata, non all'importazione.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Qui c'era `require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder')`,
+ * valutato al caricamento del modulo. Due difetti in una riga.
+ *
+ * Il primo: la chiave veniva letta PRIMA che `assertProductionEnv()` avesse
+ * modo di girare, quindi il ripiego `sk_test_placeholder` esisteva anche in
+ * produzione. Non poteva incassare nulla — nessuna chiamata sarebbe andata a
+ * buon fine — ma il fallimento arrivava come un errore Stripe incomprensibile
+ * al primo pagamento di un cliente vero, invece che come un rifiuto d'avvio.
+ *
+ * Il secondo, piu' sottile: un valore di ripiego che «sembra» una chiave
+ * impedisce a chiunque di accorgersi che la chiave manca. La direzione giusta
+ * e' quella che il resto del progetto ha gia' scelto — fallire forte e presto.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+let stripeClient = null;
+
+const stripe = new Proxy({}, {
+  get(_target, prop) {
+    if (!stripeClient) {
+      const key = process.env.STRIPE_SECRET_KEY;
+      if (!key) {
+        // Non dovrebbe accadere: `requireFeature('payments')` chiude le rotte e
+        // `assertProductionEnv()` rifiuta l'avvio. Se accade, e' un errore di
+        // montaggio e va detto con chiarezza invece di produrre un 500 opaco.
+        throw new Error('STRIPE_SECRET_KEY non configurata: il percorso di pagamento non è utilizzabile.');
+      }
+      stripeClient = require('stripe')(key);
+    }
+    return stripeClient[prop];
+  }
+});
+const { requireVerifiedEmail } = require('./../middleware/requireVerifiedEmail');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const User = require('../models/User');
@@ -53,6 +88,24 @@ const isMockStripe = () => mockPaymentsEnabled();
 
 // Numero massimo di crediti accreditabili da un singolo evento: nessun
 // pacchetto vale di più, quindi un valore superiore è un dato manomesso.
+/**
+ * Ricerca in una tabella letterale, senza ereditare da `Object.prototype` (S12).
+ *
+ * `CREDIT_PACKAGES[packageId]` con `packageId === '__proto__'` restituisce
+ * `Object.prototype`, che è truthy: il controllo `if (!pkg) return 400` non
+ * scattava, e a valle `pkg.amount` e `pkg.credits` erano `undefined` fino a far
+ * fallire la creazione della transazione con un 500. Stesso effetto con
+ * `'constructor'`, e su `SUBSCRIPTION_PLANS` produceva `new Date(NaN)` e un
+ * `CastError`. Nessun accredito indebito — solo 500 gratuiti su rotte
+ * autenticate — ma è un difetto che si chiude in una riga.
+ *
+ * Il modo corretto era già usato in `services/vat.js`: qui era rimasto fuori.
+ */
+const cerca = (tabella, chiave) =>
+  (typeof chiave === 'string' && Object.prototype.hasOwnProperty.call(tabella, chiave))
+    ? tabella[chiave]
+    : null;
+
 const MAX_GRANTABLE_CREDITS = Math.max(...Object.values(CREDIT_PACKAGES).map((p) => p.credits));
 
 /**
@@ -106,11 +159,11 @@ router.get('/plans', requireFeature('subscriptions'), (req, res) => {
 });
 
 // POST /api/payments/checkout - Create Stripe PaymentIntent for a credit pack
-router.post('/checkout', requireFeature('payments'), requireAuth, checkoutLimiter, async (req, res) => {
+router.post('/checkout', requireFeature('payments'), requireAuth, requireVerifiedEmail, checkoutLimiter, async (req, res) => {
   try {
     const { packageId } = req.body;
 
-    const pkg = CREDIT_PACKAGES[packageId];
+    const pkg = cerca(CREDIT_PACKAGES, packageId);
     if (!pkg) {
       return res.status(400).json({ error: 'Pacchetto di crediti non valido' });
     }
@@ -254,13 +307,42 @@ router.post('/webhook', async (req, res) => {
         return res.status(200).json({ received: true, duplicate: true });
       }
 
-      await User.findByIdAndUpdate(userId, { $inc: { credits: amount } });
+      /**
+       * Si accredita ciò che dice la TRANSAZIONE, non i metadati (S4).
+       *
+       * Era `User.findByIdAndUpdate(userId, { $inc: { credits: amount } })`,
+       * con `userId` e `amount` presi dai metadati dell'evento — cioè da un
+       * payload esterno — mentre `claimed` era già lì: il record scritto dal
+       * server al momento del checkout, a partire dalla tabella dei pacchetti
+       * che sta in questo file. La transazione veniva rivendicata in modo
+       * atomico (l'idempotenza era corretta) e poi ignorata.
+       *
+       * Non è sfruttabile da un client anonimo: serve una firma Stripe valida.
+       * Ma è esattamente la difesa in profondità che il resto del file applica
+       * ovunque, e il record autorevole esisteva già. Un evento con
+       * `metadata.credits = "600"` su un pacchetto da 50 accreditava 600.
+       *
+       * I metadati restano, come CONTROLLO: se divergono, l'accredito segue il
+       * record e la divergenza finisce nel log, dove qualcuno può vederla.
+       */
+      if (claimed.credits !== amount || String(claimed.userId) !== String(userId)) {
+        warnFailure(
+          req,
+          new Error(
+            `Metadati discordi su ${paymentIntent.id}: ` +
+            `metadata=${userId}/${amount} transazione=${claimed.userId}/${claimed.credits}`
+          ),
+          'Accreditato secondo la transazione, non secondo i metadati'
+        );
+      }
+
+      await User.findByIdAndUpdate(claimed.userId, { $inc: { credits: claimed.credits } });
       await assignInvoiceNumber(claimed);
 
       // Accredito riuscito: va nel log strutturato, con il requestId, perché è
       // la riga che si cerca quando qualcuno scrive «ho pagato e non vedo nulla».
       (req.log || logger).info(
-        { credits: amount, userId, paymentIntentId: paymentIntent.id },
+        { credits: claimed.credits, userId: claimed.userId, paymentIntentId: paymentIntent.id },
         'Crediti accreditati dal webhook Stripe'
       );
       return res.status(200).json({ received: true });
@@ -285,7 +367,7 @@ router.post('/webhook', async (req, res) => {
   if (event.type === 'checkout.session.completed') {
     const s = event.data.object;
     const { userId, plan } = s.metadata || {};
-    const cfg = SUBSCRIPTION_PLANS[plan];
+    const cfg = cerca(SUBSCRIPTION_PLANS, plan);
     // Una sessione completata non è necessariamente pagata (es. pagamenti
     // differiti): attivare l'abbonamento senza questo controllo regalerebbe
     // l'accesso a chi non ha ancora pagato.
@@ -299,6 +381,19 @@ router.post('/webhook', async (req, res) => {
         dailyMessageCount: 0,
         dailyImageCount: 0,
         lastResetDate: now
+      }, {
+        /**
+         * `runValidators`, e non è pignoleria (S3).
+         *
+         * `findByIdAndUpdate` in Mongoose NON esegue i validator dello schema
+         * se non glielo si chiede: l'`enum` su `subscription` c'era, e su
+         * questa riga non valeva nulla. `plan` arriva dai metadati di un evento
+         * esterno. Prima `reserveAllowance` rispondeva a un piano sconosciuto
+         * concedendo chiamate al modello illimitate e gratuite; ora nega, ma la
+         * scrittura sbagliata non deve avvenire comunque — le due difese
+         * servono a cose diverse.
+         */
+        runValidators: true
       });
     }
     return res.status(200).json({ received: true });
@@ -351,7 +446,8 @@ router.post('/webhook', async (req, res) => {
     if (sub.customer) {
       await User.findOneAndUpdate(
         { stripeCustomerId: sub.customer },
-        { subscription: 'free', subscriptionExpiresAt: null }
+        { subscription: 'free', subscriptionExpiresAt: null },
+        { runValidators: true }
       );
     }
     return res.status(200).json({ received: true });
@@ -431,7 +527,7 @@ router.post('/confirm', requireFeature('payments'), requireAuth, async (req, res
 router.post('/subscribe', requireFeature('subscriptions'), requireAuth, async (req, res) => {
   try {
     const { plan } = req.body;
-    const cfg = SUBSCRIPTION_PLANS[plan];
+    const cfg = cerca(SUBSCRIPTION_PLANS, plan);
     if (!cfg) {
       return res.status(400).json({ error: 'Piano di abbonamento non valido' });
     }
@@ -448,7 +544,7 @@ router.post('/subscribe', requireFeature('subscriptions'), requireAuth, async (r
           dailyImageCount: 0,
           lastResetDate: now
         },
-        { new: true }
+        { new: true, runValidators: true }
       );
 
       const subVat = breakdown(cfg.amount, resolveCountry(req.user, req.body.country));
@@ -646,7 +742,7 @@ router.get('/receipt/:transactionId', requireAuth, async (req, res) => {
  */
 router.get('/vat-preview', requireFeature('payments'), requireAuth, async (req, res) => {
   const { packageId, plan } = req.query;
-  const source = CREDIT_PACKAGES[packageId] || SUBSCRIPTION_PLANS[plan];
+  const source = cerca(CREDIT_PACKAGES, packageId) || cerca(SUBSCRIPTION_PLANS, plan);
   if (!source) return res.status(400).json({ error: 'Pacchetto o piano non valido' });
 
   const country = resolveCountry(req.user, req.query.country);

@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * un'ora di diagnosi sbagliata.
  */
 test('la galleria carica i personaggi dall\'API reale', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/discover');
   await expect(page.getByRole('link', { name: /Aria Thorne/ }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: /Marcus Vance/ }).first()).toBeVisible();
 });

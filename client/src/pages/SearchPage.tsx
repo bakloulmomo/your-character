@@ -5,6 +5,7 @@ import { useCharacters } from '../hooks/useCharacters';
 import CharacterCard from '../components/CharacterCard';
 import { CardSkeleton, EmptyState, ErrorState } from '../components/ui/States';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { PageContainer, PageHeader } from '../components/ui/Page';
 
 /**
  * Pagina di ricerca con indirizzo proprio.
@@ -73,8 +74,8 @@ export default function SearchPage() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
-      <h1 className="mb-5 font-display text-2xl font-bold text-ink">Cerca</h1>
+    <PageContainer width="wide">
+      <PageHeader eyebrow="Galleria" title="Cerca" className="mb-8" />
 
       <form onSubmit={(e) => e.preventDefault()} role="search" className="mb-8">
         <label htmlFor="search-input" className="sr-only">Cerca personaggi per nome, descrizione o tag</label>
@@ -126,6 +127,6 @@ export default function SearchPage() {
           </div>
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

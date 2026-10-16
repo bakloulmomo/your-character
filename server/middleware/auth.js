@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
-const { getAuth } = require('@clerk/express');
 const User = require('../models/User');
 const { jwtSecret, isTest, welcomeCredits } = require('../config/env');
 const { applyBanExpiry } = require('../utils/time');
+const { renewIfStale } = require('../services/session');
 const { serverFailure, warnFailure } = require('../services/failure');
 
 /**
@@ -23,12 +23,23 @@ const extractToken = (req) => {
  * Risolve l'utente della richiesta senza imporre l'autenticazione.
  * Restituisce null se la richiesta è anonima o se la sessione è stata revocata.
  */
-const resolveUser = async (req) => {
+const resolveUser = async (req, res) => {
   // 1. JWT nativo (header o cookie)
   const token = extractToken(req);
   if (token) {
     try {
-      const decoded = jwt.verify(token, jwtSecret());
+      /**
+       * L'algoritmo si dichiara, non si deduce dal token.
+       *
+       * Senza `algorithms`, `jwt.verify` accetta qualunque algoritmo dichiarato
+       * NELL'INTESTAZIONE DEL TOKEN — cioe' da chi il token lo ha scritto. E'
+       * la premessa di un'intera famiglia di attacchi di confusione
+       * dell'algoritmo. Con HS256 e un segreto solo il rischio pratico oggi e'
+       * nullo, ma dipende da una proprieta' della libreria e non da una nostra
+       * scelta: il giorno in cui si passasse a una chiave asimmetrica, la
+       * differenza sarebbe fra «firmato da noi» e «firmato da chiunque».
+       */
+      const decoded = jwt.verify(token, jwtSecret(), { algorithms: ['HS256'] });
       if (decoded && decoded.id) {
         const user = await User.findById(decoded.id);
         // La versione nel token deve corrispondere a quella dell'account:
@@ -37,6 +48,20 @@ const resolveUser = async (req) => {
           // Una sospensione a termine scaduta viene revocata qui, al primo
           // accesso successivo: e' il punto in cui l'utente si ripresenta.
           await applyBanExpiry(user);
+          /**
+           * Rinnovo silenzioso della sessione.
+           *
+           * Sta QUI e non in una rotta perche' e' l'unico punto attraversato da
+           * ogni richiesta autenticata: rinnovare solo in `/auth/me`
+           * significherebbe rinnovare solo a chi ricarica la pagina, e chi
+           * tiene la scheda aperta per due giorni verrebbe disconnesso proprio
+           * mentre sta usando il prodotto.
+           *
+           * Non fallisce e non blocca: se il rinnovo non riesce, l'utente
+           * dovra' riautenticarsi fra qualche ora — che e' un fastidio, non un
+           * errore da propagare alla richiesta in corso.
+           */
+          renewIfStale(res, user, decoded);
           return user;
         }
       }
@@ -45,29 +70,33 @@ const resolveUser = async (req) => {
     }
   }
 
-  // 2. Contesto Clerk, quando presente
-  let clerkId = null;
-  try {
-    const auth = getAuth(req);
-    if (auth && auth.userId) clerkId = auth.userId;
-  } catch (e) {
-    // Contesto Clerk non disponibile.
-  }
-
-  if (clerkId) {
-    let user = await User.findOne({ clerkId });
-    if (user) await applyBanExpiry(user);
-    if (!user) {
-      user = await User.create({
-        clerkId,
-        authProvider: 'clerk',
-        email: `${clerkId}@user.your-character.app`,
-        username: `user_${clerkId.slice(-6)}`,
-        credits: welcomeCredits()
-      });
-    }
-    return user;
-  }
+  /**
+   * 2. Il secondo percorso di autenticazione — RIMOSSO (S2).
+   *
+   * Qui c'era un ramo Clerk che, trovando un `userId` senza un account
+   * corrispondente, ne CREAVA uno con i crediti di benvenuto:
+   *
+   *     user = await User.create({ clerkId, ..., credits: welcomeCredits() });
+   *
+   * Non passava da `/register`, quindi non incontrava né il codice d'invito
+   * della beta chiusa, né `registerLimiter`, né la data di nascita. Il
+   * middleware si montava se `CLERK_PUBLISHABLE_KEY` iniziava per `pk_test_c`
+   * — condizione vera anche con `NODE_ENV=production`, cioè esattamente la
+   * configurazione plausibile di una beta. E un'istanza di sviluppo Clerk
+   * accetta registrazioni da chiunque: N identità là fuori diventavano N
+   * account qui, ognuno con cento crediti a carico della quota Gemini
+   * condivisa, che è per progetto e non per utente.
+   *
+   * Non è stato irrigidito ma eliminato, perché Clerk era già stato
+   * abbandonato ovunque: `@clerk/clerk-react` non aveva un solo import nel
+   * client, l'informativa privacy dichiara che si usa un JWT proprio, e nessun
+   * test copriva questo ramo. Restava solo il pezzo che creava account.
+   *
+   * Due meccanismi di identità sullo stesso modello `User`, con regole
+   * d'ingresso diverse, sono un difetto anche quando entrambi funzionano: la
+   * più permessiva è quella che conta, ed è quella che nessuno guarda.
+   *
+   */
 
   // 3. Header di mock — SOLO in ambiente di test.
   // Non deve mai essere attivo altrove: permetterebbe di impersonare
@@ -82,7 +111,19 @@ const resolveUser = async (req) => {
           authProvider: 'clerk',
           email: req.headers['x-mock-email'] || `${mockClerkHeader}@example.com`,
           username: req.headers['x-mock-username'] || mockClerkHeader,
-          credits: welcomeCredits()
+          credits: welcomeCredits(),
+          /**
+           * Con l'indirizzo gia' confermato: questo varco esiste per impersonare
+           * un utente ORDINARIO in un test, e un utente ordinario ha l'email
+           * confermata. Lasciarlo non verificato farebbe rispondere 403 a
+           * `requireVerifiedEmail` prima di ogni controllo di proprieta', e i
+           * test che verificano «l'estraneo riceve 404» misurerebbero il
+           * cancello sbagliato invece dell'autorizzazione che volevano provare.
+           *
+           * Chi deve provare il cancello crea l'utente esplicitamente, come fa
+           * `emailVerification.test.js`.
+           */
+          emailVerifiedAt: new Date()
         });
       }
       return user;
@@ -99,7 +140,7 @@ const resolveUser = async (req) => {
  */
 const attachUser = async (req, res, next) => {
   try {
-    const user = await resolveUser(req);
+    const user = await resolveUser(req, res);
     req.user = user && !user.isBanned ? user : null;
     next();
   } catch (error) {
@@ -118,7 +159,7 @@ const attachUser = async (req, res, next) => {
  */
 const requireAuth = async (req, res, next) => {
   try {
-    const dbUser = await resolveUser(req);
+    const dbUser = await resolveUser(req, res);
 
     if (!dbUser) {
       return res.status(401).json({ error: 'Autenticazione richiesta' });

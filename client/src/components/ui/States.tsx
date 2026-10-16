@@ -1,23 +1,34 @@
 import { Loader2, AlertTriangle, Inbox } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Button } from './Button';
 
-/** Scheletro di caricamento con la forma delle card reali. */
+/**
+ * Scheletro di caricamento con la forma della card VERA.
+ *
+ * Non lo era. Disegnava un rettangolo bordato con un avatar tondo a sinistra e
+ * due righe di testo a destra — la forma che le schede avevano due revisioni
+ * fa — su una griglia a colonne fisse. La card reale è un ritratto 4:5 senza
+ * bordo e senza fondo, con il nome sotto, su una griglia `auto-fill`. Cioè: il
+ * caricamento mostrava una cosa, e al suo posto ne compariva un'altra, di
+ * dimensioni diverse, facendo saltare l'impaginazione a ogni apertura.
+ *
+ * Uno scheletro che non combacia è peggio di nessuno scheletro: promette una
+ * disposizione e poi la smentisce. Le misure qui sotto sono le stesse di
+ * `CharacterCard` variante griglia e della griglia di `DiscoverPage` — se una
+ * delle due cambia, va cambiata anche questa.
+ */
 export function CardSkeleton({ count = 8 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div
+      className="grid gap-x-8 gap-y-14 [grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))]"
+      aria-hidden="true"
+    >
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="animate-pulse rounded-xl border border-line bg-surface p-4">
-          <div className="mb-3 flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-line" />
-            <div className="flex-1 space-y-2">
-              <div className="h-3 w-2/3 rounded bg-line" />
-              <div className="h-2 w-1/3 rounded bg-line/60" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="h-2 w-full rounded bg-line/60" />
-            <div className="h-2 w-4/5 rounded bg-line/60" />
-          </div>
+        <div key={i} className="animate-pulse">
+          <div className="mb-3.5 aspect-[4/5] rounded-lg bg-surface" />
+          <div className="h-4 w-3/5 rounded bg-surface" />
+          <div className="mt-2.5 h-2.5 w-full rounded bg-surface/70" />
+          <div className="mt-1.5 h-2.5 w-4/5 rounded bg-surface/70" />
         </div>
       ))}
     </div>
@@ -58,9 +69,9 @@ export function ErrorState({ title, description, onRetry }: { title: string; des
       <p className="text-base font-medium text-ink">{title}</p>
       {description && <p className="max-w-sm text-sm text-ink-muted">{description}</p>}
       {onRetry && (
-        <button onClick={onRetry} className="btn-secondary mt-2 rounded-xl px-4 py-2 text-sm">
+        <Button onClick={onRetry} className="mt-2">
           Riprova
-        </button>
+        </Button>
       )}
     </div>
   );

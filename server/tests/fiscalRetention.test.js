@@ -47,6 +47,7 @@ describe('Ritenzione fiscale alla cancellazione dell account', () => {
     ]);
 
     utente = await User.create({
+    emailVerifiedAt: new Date(),
       email: 'cliente@example.com', username: 'cliente', authProvider: 'local',
       birthdate: new Date('1990-01-01'), credits: 50
     });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, Clock3, Flag, Loader2, Check, X, ExternalLink } from 'lucide-react';
+import { Clock3, Flag, Loader2, Check, X, ExternalLink } from 'lucide-react';
 import api from '../services/api';
 import { useStore } from '../store/useStore';
 import { EmptyState, ErrorState, Spinner } from '../components/ui/States';
@@ -9,6 +9,8 @@ import Modal from '../components/ui/Modal';
 import { relativeTime } from '../lib/format';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { errorMessage } from '../lib/apiError';
+import { Button } from '../components/ui/Button';
+import { PageContainer, PageHeader } from '../components/ui/Page';
 
 /**
  * Coda di moderazione (FASE D — S2-2, S2-13).
@@ -97,7 +99,7 @@ export default function ModerationPage() {
     try {
       const [ov, chars, reps] = await Promise.all([
         api.get('/admin/overview'),
-        api.get('/admin/characters?status=pending'),
+        api.get('/admin/characters?status=da_rivedere'),
         api.get('/admin/reports?status=pending')
       ]);
       setOverview(ov.data);
@@ -116,7 +118,7 @@ export default function ModerationPage() {
       <EmptyState
         title="Pagina non disponibile"
         description="Questa sezione è riservata al team di moderazione."
-        action={<Link to="/" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
+        action={<Link to="/discover" className="btn-secondary rounded-xl px-4 py-2 text-sm">Torna a Scopri</Link>}
       />
     );
   }
@@ -161,7 +163,7 @@ export default function ModerationPage() {
       onClick={() => setTab(id)}
       aria-pressed={tab === id}
       className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition-colors ${
-        tab === id ? 'border-accent bg-accent-wash text-accent-glow' : 'border-line bg-surface text-ink-muted hover:border-line-strong'
+        tab === id ? 'border-ink text-ink' : 'border-line text-ink-muted hover:border-line-control hover:text-ink'
       }`}
     >
       {label}
@@ -170,13 +172,12 @@ export default function ModerationPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-8 md:px-8">
-      <h1 className="mb-1 flex items-center gap-2 font-display text-2xl font-bold text-ink">
-        <ShieldCheck className="h-5 w-5 text-accent-glow" aria-hidden="true" /> Moderazione
-      </h1>
-      <p className="mb-6 text-sm text-ink-muted">
-        Personaggi in attesa di revisione e segnalazioni aperte, dalla più grave alla più recente.
-      </p>
+    <PageContainer width="prose">
+      <PageHeader
+        eyebrow="Strumenti interni"
+        title="Moderazione"
+        description="Personaggi già pubblicati che nessuno ha ancora esaminato, e segnalazioni aperte dalla più grave alla più recente."
+      />
 
       <div className="mb-6 flex flex-wrap gap-2">
         {tabButton('characters', 'Personaggi', overview?.pendingCharacters ?? characters.length)}
@@ -185,7 +186,7 @@ export default function ModerationPage() {
 
       {tab === 'characters' && (
         characters.length === 0 ? (
-          <EmptyState icon={<Check className="h-7 w-7" />} title="Nessun personaggio in attesa" description="La coda di revisione è vuota." />
+          <EmptyState icon={<Check className="h-7 w-7" />} title="Nessun personaggio da esaminare" description="Tutto ciò che è stato pubblicato è già passato sotto gli occhi di qualcuno." />
         ) : (
           <ul className="space-y-4">
             {characters.map((c) => (
@@ -333,16 +334,16 @@ export default function ModerationPage() {
           <button onClick={() => setRejecting(null)} className="btn-secondary rounded-xl px-4 py-2 text-sm">
             Annulla
           </button>
-          <button
+          <Button
+            variant="danger-strong"
             onClick={() => rejecting && decideCharacter(rejecting._id, 'rejected', rejectReason.trim())}
-            disabled={!rejectReason.trim() || working === rejecting?._id}
-            className="flex items-center gap-2 rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/85 disabled:opacity-40"
+            disabled={!rejectReason.trim()}
+            loading={working === rejecting?._id}
           >
-            {working === rejecting?._id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Respingi
-          </button>
+          </Button>
         </div>
       </Modal>
-    </div>
+    </PageContainer>
   );
 }

@@ -42,8 +42,10 @@ describe('FASE A — Autorizzazione e isolamento dei personaggi privati', () => 
   beforeEach(async () => {
     await Promise.all([User.deleteMany({}), Character.deleteMany({}), Chat.deleteMany({})]);
 
-    owner = await User.create({ email: 'owner@example.com', username: 'owner', authProvider: 'local' });
-    stranger = await User.create({ email: 'stranger@example.com', username: 'stranger', authProvider: 'local' });
+    owner = await User.create({
+    emailVerifiedAt: new Date(), email: 'owner@example.com', username: 'owner', authProvider: 'local' });
+    stranger = await User.create({
+    emailVerifiedAt: new Date(), email: 'stranger@example.com', username: 'stranger', authProvider: 'local' });
     strangerToken = tokenFor(stranger);
 
     privateCharacter = await Character.create({

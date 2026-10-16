@@ -118,6 +118,58 @@ describe('Sidebar', () => {
       expect(await screen.findByText(/Nessuna conversazione/i)).toBeInTheDocument();
     });
 
+    /**
+     * La cronologia oltre la prima pagina.
+     *
+     * Il server manda le trenta conversazioni più recenti e il seguito in
+     * `X-Has-More` / `X-Next-Cursor`. Finché il client non li leggeva, chi ne
+     * aveva più di trenta non poteva più raggiungere le altre: esistevano,
+     * erano ordinate, ed erano irraggiungibili dall'interfaccia.
+     */
+    it('offre «carica altre» solo quando ce ne sono davvero', async () => {
+      mockedApi.get.mockResolvedValue({ data: [chatFixture('a')] });
+      resetStore({ user: testUser() });
+      renderSidebar();
+
+      await screen.findByText('Personaggio a');
+      expect(screen.queryByRole('button', { name: /Carica altre/i })).not.toBeInTheDocument();
+    });
+
+    it('carica la pagina successiva e la accoda', async () => {
+      mockedApi.get.mockResolvedValueOnce({
+        data: [chatFixture('primo')],
+        headers: { 'x-has-more': 'true', 'x-next-cursor': '2026-09-01T00:00:00.000Z' }
+      });
+      resetStore({ user: testUser() });
+      renderSidebar();
+
+      const altre = await screen.findByRole('button', { name: /Carica altre/i });
+
+      mockedApi.get.mockResolvedValueOnce({
+        data: [chatFixture('secondo')],
+        headers: { 'x-has-more': 'false' }
+      });
+      await userEvent.click(altre);
+
+      expect(await screen.findByText('Personaggio secondo')).toBeInTheDocument();
+      // Il primo resta: si accoda, non si sostituisce.
+      expect(screen.getByText('Personaggio primo')).toBeInTheDocument();
+      // E il comando sparisce quando la lista è finita.
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /Carica altre/i })).not.toBeInTheDocument()
+      );
+    });
+
+    it('una risposta senza intestazioni non blocca la cronologia', async () => {
+      // Un proxy che filtra le intestazioni, o uno strato di rete finto: la
+      // lista deve comparire lo stesso, senza il comando di continuazione.
+      mockedApi.get.mockResolvedValue({ data: [chatFixture('solo')] });
+      resetStore({ user: testUser() });
+      renderSidebar();
+
+      expect(await screen.findByText('Personaggio solo')).toBeInTheDocument();
+    });
+
     it('a un visitatore anonimo propone di accedere', async () => {
       resetStore({ user: null });
       renderSidebar();

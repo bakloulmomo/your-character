@@ -58,10 +58,12 @@ describe('Il systemPrompt non esce dalla API', () => {
     ]);
 
     autore = await User.create({
+    emailVerifiedAt: new Date(),
       email: 'autore@example.com', username: 'autore', authProvider: 'local',
       birthdate: new Date('1990-01-01')
     });
     estraneo = await User.create({
+    emailVerifiedAt: new Date(),
       email: 'estraneo@example.com', username: 'estraneo', authProvider: 'local',
       birthdate: new Date('1990-01-01'), credits: 50
     });

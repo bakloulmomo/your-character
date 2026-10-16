@@ -29,6 +29,7 @@ describe('FASE 6: Abuse Reporting & Safety Integration Tests', () => {
     ]);
 
     testUser = await User.create({
+    emailVerifiedAt: new Date(),
       clerkId: 'clerk_report_user',
       email: 'reporter@example.com',
       username: 'reporteruser'

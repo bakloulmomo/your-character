@@ -9,7 +9,15 @@ interface Props {
   description?: ReactNode;
   children: ReactNode;
   /** Larghezza massima; 'lg' per i modali con più contenuto. */
-  size?: 'md' | 'lg';
+  /**
+   * `sm` per una conferma secca, `xl` per un modulo lungo.
+   *
+   * Ce n'erano due, e il modulo di registrazione completo — email, nome utente,
+   * password, quattro regole, tre selettori per la data e il codice d'invito —
+   * stava nel più stretto dei due, 26.5rem. Non perché fosse la larghezza
+   * giusta, ma perché non ne esistevano altre.
+   */
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 const FOCUSABLE =
@@ -80,6 +88,13 @@ const isReachable = (el: HTMLElement) => {
  * memoizzino le callback. Sei dei sette consumatori di questo modale passano
  * una lambda inline, ed è legittimo che lo facciano.
  */
+const LARGHEZZE = {
+  sm: 'max-w-sm',
+  md: 'max-w-[26.5rem]',
+  lg: 'max-w-2xl',
+  xl: 'max-w-3xl'
+} as const;
+
 export default function Modal({ open, onClose, title, description, children, size = 'md' }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -207,7 +222,7 @@ export default function Modal({ open, onClose, title, description, children, siz
      */
     <div
       data-testid="modal-overlay"
-      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-md sm:items-center"
+      className="scrim fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto p-4 backdrop-blur-md sm:items-center"
       onMouseDown={(e) => {
         pressStartedOnOverlay.current = e.target === e.currentTarget;
       }}
@@ -223,13 +238,12 @@ export default function Modal({ open, onClose, title, description, children, siz
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`animate-slide-up my-auto w-full outline-none ${size === 'lg' ? 'max-w-2xl' : 'max-w-[26.5rem]'}
-                    rounded-xl border border-line bg-bg-elevated
-                    shadow-[0_32px_80px_-16px_rgba(0,0,0,0.85)] ring-1 ring-white/[0.06]`}
+        className={`animate-slide-up my-auto w-full outline-none ${LARGHEZZE[size]}
+                    rounded-lg border border-line bg-bg-elevated shadow-overlay`}
       >
         <div className="flex items-start justify-between gap-4 px-6 pb-5 pt-6">
           <div className="min-w-0">
-            <h2 id={titleId} className="font-display text-xl font-semibold leading-tight tracking-[-0.02em] text-ink">
+            <h2 id={titleId} className="title-display text-display-sm">
               {title}
             </h2>
             {description && (

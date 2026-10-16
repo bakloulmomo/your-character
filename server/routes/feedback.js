@@ -9,6 +9,7 @@ const Feedback = require('../models/Feedback');
 const Message = require('../models/Message');
 const Chat = require('../models/Chat');
 const { serverFailure } = require('../services/failure');
+const { recordMail } = require('../services/metrics');
 
 const feedbackLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -20,7 +21,7 @@ const feedbackLimiter = rateLimit({
   skip: () => isTest() && process.env.FORCE_RATE_LIMIT !== '1'
 });
 
-/** Destinatario delle notifiche: chi gestisce l'app. */
+// Destinatario delle notifiche: chi gestisce l'app 
 const notifyAddress = () => process.env.FEEDBACK_EMAIL || adminEmails()[0] || null;
 
 const ETICHETTE = {
@@ -64,10 +65,26 @@ router.post('/', requireAuth, feedbackLimiter, async (req, res) => {
       messagesSent
     });
 
-    // Notifica. Il fallimento non deve mai far fallire la richiesta: per
-    // l'utente l'opinione e' stata consegnata, ed e' vero — e' in database.
+    /**
+     * Notifica. Il fallimento non deve mai far fallire la richiesta: per
+     * l'utente l'opinione e' stata consegnata, ed e' vero — e' in database.
+     *
+     * Ma non deve nemmeno sparire. Prima un destinatario non configurato era
+     * un `if` senza ramo `else`: nessun log, nessun contatore, nessun modo di
+     * accorgersi che le opinioni si accumulavano in un database che nessuno
+     * apriva. Il canale sembrava funzionare da entrambi i lati — l'utente
+     * vedeva «grazie», il gestore non vedeva niente e concludeva che nessuno
+     * scriveva.
+     */
     const to = notifyAddress();
-    if (to) {
+
+    if (!to) {
+      req.log.error(
+        { feedbackId: feedback._id },
+        'FEEDBACK_EMAIL e ADMIN_EMAILS non configurati: opinione salvata ma nessuno avvisato'
+      );
+      recordMail(false);
+    } else {
       try {
         const esito = await sendMail({
           to,
@@ -84,11 +101,22 @@ router.post('/', requireAuth, feedbackLimiter, async (req, res) => {
             `Ricevuto il ${new Date().toLocaleString('it-IT')}`
           ].join('\n')
         });
+        recordMail(!!(esito && esito.delivered));
+
         if (esito && esito.delivered) {
           await Feedback.findByIdAndUpdate(feedback._id, { notified: true });
+        } else {
+          // `error`, non `warn`: e' il canale con cui si scopre se il prodotto
+          // piace. Se smette di funzionare va visto oggi, non al prossimo
+          // controllo dei log.
+          req.log.error(
+            { feedbackId: feedback._id, to, reason: esito && esito.reason },
+            'Notifica del feedback NON recapitata'
+          );
         }
       } catch (mailErr) {
-        req.log.warn({ err: mailErr.message }, 'Notifica del feedback non inviata');
+        recordMail(false);
+        req.log.error({ err: mailErr.message, feedbackId: feedback._id }, 'Notifica del feedback non inviata');
       }
     }
 

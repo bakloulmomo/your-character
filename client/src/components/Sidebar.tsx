@@ -17,10 +17,10 @@ export default function Sidebar() {
   const {
     user, logout, isSidebarCollapsed, toggleSidebar,
     isMobileSidebarOpen, setMobileSidebarOpen,
-    setAuthModalOpen, setBuyCreditsModalOpen, features, setFeedbackModalOpen
+    setAuthModalOpen, setBuyCreditsModalOpen, features, setFeedbackModalOpen, askConfirm
   } = useStore();
 
-  const { chats, status, deleteChat } = useChats();
+  const { chats, status, deleteChat, loadMore, hasMore, loadingMore } = useChats();
   const [query, setQuery] = useState('');
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -87,7 +87,7 @@ export default function Sidebar() {
       {/* Velo sotto la barra su mobile */}
       {isMobileSidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          className="scrim fixed inset-0 z-30 md:hidden"
           onClick={() => setMobileSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -102,10 +102,13 @@ export default function Sidebar() {
         {/* Intestazione */}
         <div className="flex items-center justify-between gap-2 px-3 py-3">
           <Link
-            to="/"
+            to="/discover"
             className={`flex items-center gap-2 font-display text-sm font-bold text-ink ${collapsed ? 'md:mx-auto' : ''}`}
           >
-            <img src="/favicon_logo.jpeg" alt="" className="h-7 w-7 rounded-md object-cover" />
+            {/* Il vettoriale, non più il JPEG con la scacchiera dentro.
+                `object-cover` su un logo era già sbagliato di suo: ritaglia il
+                marchio invece di contenerlo. */}
+            <img src="/favicon.svg" alt="" className="h-7 w-7" />
             {!collapsed && <span>your-character</span>}
           </Link>
 
@@ -168,7 +171,7 @@ export default function Sidebar() {
           )}
 
           <nav className="flex flex-col gap-1">
-            {navItem('/', 'Scopri', Compass)}
+            {navItem('/discover', 'Scopri', Compass)}
             {/* La voce «Cerca» esiste solo da compressa.
                 Da espansa il campo qui sopra porta alla stessa pagina e ci
                 arriva con il termine gia' scritto: averli entrambi significava
@@ -214,7 +217,7 @@ export default function Sidebar() {
 
               {user && status === 'ready' && chats.length === 0 && (
                 <p className="px-1 text-xs leading-relaxed text-ink-dim">
-                  Nessuna conversazione. Scegli un personaggio da <Link to="/" className="text-ink-muted underline underline-offset-2 hover:text-ink">Scopri</Link>.
+                  Nessuna conversazione. Scegli un personaggio da <Link to="/discover" className="text-ink-muted underline underline-offset-2 hover:text-ink">Scopri</Link>.
                 </p>
               )}
 
@@ -232,7 +235,7 @@ export default function Sidebar() {
                         >
                           <Avatar src={chat.character?.avatar} name={chat.character?.name ?? chat.title} size={28} />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[0.8125rem] font-medium text-ink">
+                            <span className="block truncate text-sm font-medium text-ink">
                               {chat.character?.name ?? chat.title}
                             </span>
                             <span className="block truncate text-micro text-ink-dim">
@@ -261,6 +264,16 @@ export default function Sidebar() {
                             <button
                               onClick={async () => {
                                 setMenuOpenFor(null);
+                                // Il menu si apre da un'icona di tre puntini
+                                // larga ventotto pixel, e questa voce cancella
+                                // una conversazione intera con tutti i suoi
+                                // messaggi. Prima non chiedeva niente.
+                                const conferma = await askConfirm({
+                                  title: `Sei sicuro di voler eliminare la conversazione con ${chat.character?.name ?? chat.title}?`,
+                                  description: 'Tutti i messaggi scambiati vengono eliminati. L\'operazione non è reversibile.'
+                                });
+                                if (!conferma) return;
+
                                 const removed = await deleteChat(chat._id);
                                 if (removed && openChatId === chat._id) navigate('/');
                               }}
@@ -276,6 +289,26 @@ export default function Sidebar() {
                   </ul>
                 </div>
               ))}
+
+              {/**
+                * «Carica altre».
+                *
+                * Il server manda le trenta conversazioni più recenti e il
+                * seguito in un'intestazione. Finché il client non lo leggeva,
+                * chi ne aveva più di trenta non poteva più raggiungere le
+                * altre: esistevano, erano ordinate, e non c'era un modo di
+                * arrivarci. Compare solo quando ce ne sono davvero, così a chi
+                * ha poche conversazioni non resta un comando che non fa nulla.
+                */}
+              {hasMore && (
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="btn-ghost mt-1 w-full rounded-md py-2 text-xs"
+                >
+                  {loadingMore ? 'Carico…' : 'Carica altre conversazioni'}
+                </button>
+              )}
             </>
           )}
 
@@ -340,7 +373,7 @@ export default function Sidebar() {
                 <Avatar src={user.avatar} name={user.username} size={28} rounded="full" />
                 {!collapsed && (
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[0.8125rem] font-medium text-ink">@{user.username}</span>
+                    <span className="block truncate text-sm font-medium text-ink">@{user.username}</span>
                     <span className="tabular block text-micro text-ink-dim">{user.credits} crediti</span>
                   </span>
                 )}
@@ -366,7 +399,25 @@ export default function Sidebar() {
                   <div className="my-1 border-t border-line" />
                   <button
                     role="menuitem"
-                    onClick={async () => { setAccountMenuOpen(false); await logout(); navigate('/'); }}
+                    onClick={async () => {
+                      setAccountMenuOpen(false);
+                      /**
+                       * Non distrugge nulla, quindi non è rossa: `destructive:
+                       * false`. Il rosso deve restare il colore di ciò che non
+                       * si recupera, altrimenti smette di significarlo.
+                       */
+                      const conferma = await askConfirm({
+                        title: 'Vuoi disconnetterti?',
+                        description: 'Le tue conversazioni restano al loro posto: le ritrovi al prossimo accesso.',
+                        confirmLabel: 'Disconnetti',
+                        cancelLabel: 'Resta connesso',
+                        destructive: false
+                      });
+                      if (!conferma) return;
+
+                      await logout();
+                      navigate('/');
+                    }}
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger/10"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" /> Disconnetti

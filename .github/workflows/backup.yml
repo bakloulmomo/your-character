@@ -1,0 +1,99 @@
+# Backup del database — il debito che `SECURITY.md` chiama il più grave.
+#
+# Su Atlas M0 non esistono backup automatici: una cancellazione accidentale è
+# definitiva, e lo resta anche se tutto il resto del progetto è verificato da
+# 335 test. Nessuna quantità di test impedisce a una `deleteMany` sbagliata di
+# essere l'ultima cosa che succede ai dati di persone vere.
+#
+# QUESTO È IL RIPIEGO GRATUITO, NON LA SOLUZIONE MIGLIORE. La soluzione migliore
+# è passare Atlas a un piano con snapshot continui (~8-10 €/mese): ripristino a
+# un punto nel tempo, nessun segreto in GitHub, nessuna finestra di 24 ore in
+# cui si perdono le scritture. Questo workflow esiste perché «gratuito e
+# imperfetto» batte «perfetto e assente», non perché sia la scelta giusta a
+# regime.
+#
+# LIMITI DA CONOSCERE PRIMA DI FIDARSENE:
+#  · granularità 24 ore: si perde fino a un giorno di conversazioni;
+#  · l'archivio è cifrato con una chiave che vive nei segreti del repository —
+#    chi controlla il repository controlla i backup;
+#  · richiede che Atlas accetti connessioni dagli IP dei runner GitHub, cioè
+#    che `0.0.0.0/0` resti aperto: è un costo di sicurezza reale, ed è la
+#    ragione in più per passare agli snapshot gestiti;
+#  · un backup mai ripristinato non è un backup. Il ripristino di prova è nel
+#    calendario di `DEPLOY.md`, trimestrale, e va ANNOTATO lì con l'esito.
+#
+# SEGRETI RICHIESTI (Settings → Secrets → Actions):
+#  · MONGODB_URI_BACKUP  — utenza Atlas di SOLA LETTURA, non quella dell'app
+#  · BACKUP_PASSPHRASE   — frase lunga e casuale, custodita FUORI da GitHub
+
+name: Backup del database
+
+on:
+  schedule:
+    # 03:17 UTC: fuori dall'ora di punta, e a un minuto non tondo perché alle
+    # 03:00 in punto parte mezzo mondo e i runner fanno la coda.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    name: Copia cifrata
+    runs-on: ubuntu-latest
+    # Un backup che resta appeso occupa un runner e non avvisa nessuno.
+    timeout-minutes: 30
+
+    steps:
+      - name: Verifica che i segreti esistano
+        # Fallire QUI, con un messaggio, invece di produrre un archivio vuoto
+        # che sembra un backup riuscito. Il modo peggiore di perdere i dati è
+        # scoprire al ripristino che le copie erano vuote da mesi.
+        env:
+          URI: ${{ secrets.MONGODB_URI_BACKUP }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          test -n "$URI"  || { echo "::error::MONGODB_URI_BACKUP non configurato"; exit 1; }
+          test -n "$PASS" || { echo "::error::BACKUP_PASSPHRASE non configurata"; exit 1; }
+
+      - name: Installa mongodump
+        run: |
+          curl -fsSL https://pgp.mongodb.com/server-7.0.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/mongodb.gpg
+          echo "deb [signed-by=/usr/share/keyrings/mongodb.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" \
+            | sudo tee /etc/apt/sources.list.d/mongodb.list
+          sudo apt-get update -qq
+          sudo apt-get install -y mongodb-database-tools
+
+      - name: Esporta
+        env:
+          MONGODB_URI_BACKUP: ${{ secrets.MONGODB_URI_BACKUP }}
+        run: |
+          # `--uri` da variabile d'ambiente e non da riga di comando: gli
+          # argomenti dei processi sono leggibili, le variabili no.
+          mongodump --uri="$MONGODB_URI_BACKUP" --archive=dump.archive --gzip
+          test -s dump.archive || { echo "::error::Archivio vuoto"; exit 1; }
+          echo "Dimensione: $(du -h dump.archive | cut -f1)"
+
+      - name: Cifra
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          # Simmetrica con frase segreta: il backup contiene email, hash di
+          # password e l'intero contenuto delle conversazioni. In chiaro dentro
+          # un artefatto sarebbe una violazione di dati con il fiocco.
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+              --passphrase "$BACKUP_PASSPHRASE" \
+              --output "backup-$(date -u +%Y%m%d).archive.gpg" dump.archive
+          rm -f dump.archive
+
+      - name: Conserva
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: '*.archive.gpg'
+          # Trenta giorni: abbastanza per accorgersi di una cancellazione, e il
+          # massimo che il piano gratuito conserva senza costi.
+          retention-days: 30
+          if-no-files-found: error
